@@ -1,13 +1,14 @@
+# Originally based on openai-python.examples.realtime.push_to_talk.py
+
 import base64
 import asyncio
 import os
 from logging import Handler, LogRecord
 import logging.config
 from typing import Any, cast, override, Literal
-from gpt
 from textual import events
 
-from audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
+from ai_realtime_text_to_speech_gui.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
 import audioop
 import time
 from pathlib import Path
@@ -15,6 +16,8 @@ import wave
 from datetime import datetime
 
 from textual.app import App, ComposeResult
+from textual import on
+from textual.events import Unmount
 from textual.logging import TextualHandler
 from textual.message import Message
 from textual.widget import Widget
@@ -23,14 +26,16 @@ from textual.reactive import reactive
 from textual.containers import Container, Horizontal
 
 from openai import AsyncOpenAI
-from openai.types.realtime.session_update_event_param import Session  # Bugfix from original
-from openai.resources.realtime.realtime import AsyncRealtimeConnection
+from openai.types.realtime.session_update_event_param import Session  # https://github.com/openai/openai-python/pull/2803
+from openai.resources.realtime.realtime import AsyncRealtimeConnection # Another bug?
 from openai.types.realtime.realtime_audio_input_turn_detection_param import ServerVad, SemanticVad
 from openai.types.realtime.realtime_response_usage import RealtimeResponseUsage
+from openai.types.realtime.conversation_item_input_audio_transcription_completed_event import UsageTranscriptTextUsageTokens
+
 
 from gpt_token_tracker.token_logger import TokenLogger
 from gpt_token_tracker.writers.log_writer import LogWriter
-from gpt_token_tracker.pricing import PricingRealtime
+from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
 from gpt_token_tracker.writers.csv_writer import CSVWriter
 
 
@@ -54,11 +59,10 @@ SAVE_SPEECH_AFTER_BYTES_MULTIPLIER: int | None = None
 MODE: Literal["manual", "server", "semantic"] = "manual"
 # PROMPT: str = "You are a quiz contestant who answers concisely and clearly a"nd as quickly as possible with just the answer, no need for a full sentence or json, just plaintext"
 PROMPT: str = "You are a quiz contestant who answers concisely and clearly and as quickly as possible with just the answer, no need for a full sentence. If the question is a statement or a true/false question, answer true or false first and then give extra context"
-IMMEDIATE_INITIALISATION_TIME: int | None = None
-OUTPUT_MODALITIES: list[Literal["text", "audio"]] = ["audio"]  # Audio is way more responsive
+IMMEDIATE_INITIALISATION_TIME: int | None = 10
+OUTPUT_MODALITIES: list[Literal["text", "audio"]] = ["text"]  # Audio is way more responsive
 TRANSCRIPTION_REALTIME_ENABLED = True
 TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
-TRANSCRIPTION_NORMAL_ENABLED = False
 LANGUAGE = "en"
 
 if TRANSCRIPTION_REALTIME_ENABLED:
@@ -115,8 +119,11 @@ speech_done = asyncio.Event()
 
 log_writer = LogWriter("realtime_tokens")
 token_logger_realtime = TokenLogger(log_writer, PricingRealtime(REALTIME_COSTS))
-csv_writer = CSVWriter("csv_writer")
-csv_token_logger_realtime = TokenLogger(csv_writer, PricingRealtime(REALTIME_COSTS))
+token_logger_realtime_transcription = TokenLogger(log_writer, PricingAudioTranscription(REALTIME_COSTS))
+csv_writer_realtime = CSVWriter(REALTIME_CONVO_CSV)
+csv_writer_realtime_transcribe = CSVWriter(REALTIME_TOKENS_CSV)
+csv_token_logger_realtime = TokenLogger(csv_writer_realtime, PricingRealtime(REALTIME_COSTS))
+csv_token_logger_realtime_transcription = TokenLogger(csv_writer_realtime_transcribe, PricingAudioTranscription(REALTIME_COSTS))
 
 
 class AmplitudeGraph(Widget):
@@ -139,7 +146,12 @@ def write_realtime_tokens(model: str, result: str, usage: RealtimeResponseUsage)
     csv_token_logger_realtime.record(model, result, usage)
 
 
-async def save_wav_chunk_transcribe(pcm_bytes: bytes, suffix: str, client, transcribe: bool) -> str:
+def write_realtime_transcribe_tokens(model: str, result: str, usage: UsageTranscriptTextUsageTokens) -> None:
+    token_logger_realtime_transcription.record(model, result, usage)
+    csv_token_logger_realtime_transcription.record(model, result, usage)
+
+
+async def save_wav_chunk(pcm_bytes: bytes, suffix: str) -> str:
     """Save PCM16 audio to a WAV file asynchronously."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
     filename = f"audio_{timestamp}_{suffix}.wav"
@@ -304,6 +316,16 @@ class RealtimeApp(App[None]):
         self.connected = asyncio.Event()
         self.start_time = time.time()
 
+    @on(Unmount)
+    async def cleanup_resources(self):
+        self.log("The app is unmounting now!")
+        await asyncio.gather(
+            asyncio.to_thread(token_logger_realtime.close()),
+            asyncio.to_thread(token_logger_realtime_transcription.close()),
+            asyncio.to_thread(csv_token_logger_realtime.close()),
+            asyncio.to_thread(csv_writer_realtime_transcribe.close())
+        )
+
     @override
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -336,20 +358,20 @@ class RealtimeApp(App[None]):
         textual_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s"))
         logging.getLogger("realtime_app").addHandler(textual_handler)
 
-        realtime_audio_worker = self.run_worker(self.handle_realtime_connection())
-        send_mic_audio_worker = self.run_worker(self.send_mic_audio())
+        self.run_worker(self.handle_realtime_connection())
+        self.run_worker(self.send_mic_audio())
 
-        async def auto_test_sequence():
+        async def listen_once():
             await asyncio.sleep(1)
             # Simulate pressing lowercase "k"
             await self.toggle_recording()
 
             await asyncio.sleep(IMMEDIATE_INITIALISATION_TIME)
             log.info('Runtime finshed, existing...')
-            self.exit()
+            await self.toggle_recording()
 
         if IMMEDIATE_INITIALISATION_TIME:
-            self.run_worker(auto_test_sequence())
+            self.run_worker(listen_once())
 
     async def on_textual_log_message(self, message: TextualLogMessage) -> None:
         """Receive log messages sent by the log handler and write them to the pane."""
@@ -458,6 +480,7 @@ class RealtimeApp(App[None]):
 
                 if event.type == "conversation.item.input_audio_transcription.completed":
                     log.debug("Audio realtime transcription response done for %s", event.item_id)
+                    log.debug("Type: %s", type(event))
                     try:
                         text = transcription_items[event.item_id]
                     except KeyError:
@@ -466,7 +489,8 @@ class RealtimeApp(App[None]):
                     log.info("[TRANSCRIPTION] REALTIME: %s", text)
 
                     if usage := getattr(event, "usage"):
-                       await asyncio.to_thread(write_realtime_tokens, MODEL, result, usage)
+                        log.debug("Type: %s", type(usage))
+                        await asyncio.to_thread(write_realtime_transcribe_tokens, MODEL, text, usage)
                     else:
                         log.warning("No token usage info in transcription response.")
                         continue
@@ -513,46 +537,6 @@ class RealtimeApp(App[None]):
                     else:
                         log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
                     if usage := getattr(event.response, "usage"):
-                        inp = usage.input_token_details
-                        out = usage.output_token_details
-
-                        # Cost calculations
-                        input_cost = (
-                                (
-                                            inp.audio_tokens * REALTIME_AUDIO_INPUT_PRICE + inp.text_tokens * REALTIME_TEXT_INPUT_PRICE)
-                                / TOKENS_PER_PRICE
-                        )
-
-                        cached_cost = (
-                                inp.cached_tokens / TOKENS_PER_PRICE * REALTIME_CACHED_AUDIO_INPUT_PRICE
-                        )
-
-                        price = REALTIME_AUDIO_OUTPUT_PRICE if "audio" in OUTPUT_MODALITIES else REALTIME_TEXT_OUTPUT_PRICE
-
-                        output_cost = (
-                                usage.output_tokens / TOKENS_PER_PRICE * price
-                        )
-
-                        total_cost = input_cost + cached_cost + output_cost
-
-                        log.debug(
-                            "[TOKENS] total=%s | input=%s (audio=%s, text=%s, cached=%s, image=%s) "
-                            "| output=%s (text=%s, audio=%s) "
-                            "| cost_est=($%.6f) [input=$%.6f, cached=$%.6f, output=$%.6f]",
-                            usage.total_tokens,
-                            usage.input_tokens,
-                            inp.audio_tokens,
-                            inp.text_tokens,
-                            inp.cached_tokens,
-                            inp.image_tokens,
-                            usage.output_tokens,
-                            out.text_tokens,
-                            out.audio_tokens,
-                            total_cost,
-                            input_cost,
-                            cached_cost,
-                            output_cost,
-                        )
                         await asyncio.to_thread(write_realtime_tokens,
                                                 MODEL,
                                                 result,
@@ -640,19 +624,16 @@ class RealtimeApp(App[None]):
 
                     if not speech_ongoing.is_set():
                         if speech_done.is_set():
-                            tg.create_task(save_wav_chunk_transcribe(wav_stream, "speech_done", self.client,
-                                                                     TRANSCRIPTION_NORMAL_ENABLED))
+                            tg.create_task(save_wav_chunk(wav_stream, "speech_done"))
                             wav_stream = b''
                             speech_done.clear()
                         elif SAVE_SILENCE_AFTER_BYTES_MULTIPLIER and len(wav_stream) > (
                                 read_size * SAVE_SILENCE_AFTER_BYTES_MULTIPLIER):
-                            tg.create_task(save_wav_chunk_transcribe(wav_stream, "periodic", self.client,
-                                                                     TRANSCRIPTION_NORMAL_ENABLED))
+                            tg.create_task(save_wav_chunk(wav_stream, "periodic"))
                             wav_stream = b''
                     elif SAVE_SPEECH_AFTER_BYTES_MULTIPLIER and len(wav_stream) > (
                             read_size * SAVE_SPEECH_AFTER_BYTES_MULTIPLIER):
-                        tg.create_task(save_wav_chunk_transcribe(wav_stream, "speech", self.client,
-                                                                 TRANSCRIPTION_NORMAL_ENABLED))
+                        tg.create_task(save_wav_chunk(wav_stream, "speech"))
                         wav_stream = b''
 
                     await asyncio.sleep(0)
@@ -661,7 +642,7 @@ class RealtimeApp(App[None]):
             finally:
                 if wav_stream:
                     tg.create_task(
-                        save_wav_chunk_transcribe(wav_stream, "periodic", self.client, TRANSCRIPTION_NORMAL_ENABLED))
+                        save_wav_chunk(wav_stream, "periodic"))
                 stream.stop()
                 stream.close()
 
