@@ -3,7 +3,6 @@
 import base64
 import asyncio
 import os
-from logging import Handler, LogRecord
 import logging.config
 from typing import Any, cast, override, Literal
 from textual import events
@@ -12,17 +11,20 @@ from ai_realtime_text_to_speech_gui.audio_util import CHANNELS, SAMPLE_RATE, Aud
 import audioop
 import time
 from pathlib import Path
-import wave
 from datetime import datetime
+
+from ai_realtime_text_to_speech_gui.app_css import CSS
+from ai_realtime_text_to_speech_gui.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
+                                                    TextualLogMessage, TextualPaneLogHandler, ConfigModal)
+from ai_realtime_text_to_speech_gui.config import ConfigManager
+from ai_realtime_text_to_speech_gui.utils import save_wav_chunk
 
 from textual.app import App, ComposeResult
 from textual import on
 from textual.events import Unmount
 from textual.logging import TextualHandler
-from textual.message import Message
-from textual.widget import Widget
-from textual.widgets import Button, Static, RichLog
-from textual.reactive import reactive
+from textual.widgets import Button, RichLog
+from textual.worker import Worker
 from textual.containers import Container, Horizontal
 
 from openai import AsyncOpenAI
@@ -39,52 +41,24 @@ from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
 from gpt_token_tracker.writers.csv_writer import CSVWriter
 
 
-class TextualLogMessage(Message):
-    """A message carrying log text for the UI."""
-
-    def __init__(self, text: str) -> None:
-        self.text = text
-        super().__init__()
-
-
-MODEL: str = "gpt-realtime-mini"
+#MODEL: str = "gpt-realtime-mini"
 LOG_CONFIG_FILE = "logging.conf"
 BASE_LOG_DIR = "logs"
-PLAY_AUDIO: bool = False
+#PLAY_AUDIO: bool = False
 AUDIO_DIR = "recordings"
 TOKENS_DIR = "tokens"
 SAVE_SILENCE_AFTER_BYTES_MULTIPLIER: int | None = 1000
 SAVE_SPEECH_AFTER_BYTES_MULTIPLIER: int | None = None
 
-MODE: Literal["manual", "server", "semantic"] = "manual"
+#MODE: Literal["manual", "server", "semantic"] = "manual"
 # PROMPT: str = "You are a quiz contestant who answers concisely and clearly a"nd as quickly as possible with just the answer, no need for a full sentence or json, just plaintext"
-PROMPT: str = "You are a quiz contestant who answers concisely and clearly and as quickly as possible with just the answer, no need for a full sentence. If the question is a statement or a true/false question, answer true or false first and then give extra context"
+#PROMPT: str = "You are a quiz contestant who answers concisely and clearly and as quickly as possible with just the answer, no need for a full sentence. If the question is a statement or a true/false question, answer true or false first and then give extra context"
 IMMEDIATE_INITIALISATION_TIME: int | None = 10
 OUTPUT_MODALITIES: list[Literal["text", "audio"]] = ["text"]  # Audio is way more responsive
-TRANSCRIPTION_REALTIME_ENABLED = True
+#TRANSCRIPTION_REALTIME_ENABLED = True
 TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
 LANGUAGE = "en"
 
-if TRANSCRIPTION_REALTIME_ENABLED:
-    TRANSCRIPTION_INFO = {
-        "language": LANGUAGE,
-        "model": TRANSCRIPTION_MODEL,
-    }
-else:
-    TRANSCRIPTION_INFO = None
-
-TURN_DETECTION: ServerVad | SemanticVad | None = None
-
-if MODE == "server":
-    TURN_DETECTION: ServerVad = {
-        "type": "server_vad",
-        "idle_timeout_ms": 5000
-    }
-elif MODE == "semantic":
-    TURN_DETECTION: SemanticVad = {
-        "type": "semantic_vad",
-        "eagerness": "high"
-    }
 
 
 REALTIME_COSTS = {
@@ -126,21 +100,6 @@ csv_token_logger_realtime = TokenLogger(csv_writer_realtime, PricingRealtime(REA
 csv_token_logger_realtime_transcription = TokenLogger(csv_writer_realtime_transcribe, PricingAudioTranscription(REALTIME_COSTS))
 
 
-class AmplitudeGraph(Widget):
-    """Displays a simple bar graph of audio amplitude."""
-    amplitude = reactive(0.0)  # 0.0 → 1.0
-
-    def render(self) -> str:
-        bar_width = max(1, self.size.width - 4)
-        scaled = self.amplitude * 3
-        clamped = min(scaled, 1.0)
-        filled = int(clamped * bar_width)
-        empty = bar_width - filled
-
-        bar = "█" * filled + " " * empty
-        return f"[{bar}] {self.amplitude:.2f}"
-
-
 def write_realtime_tokens(model: str, result: str, usage: RealtimeResponseUsage) -> None:
     token_logger_realtime.record(model, result, usage)
     csv_token_logger_realtime.record(model, result, usage)
@@ -151,152 +110,8 @@ def write_realtime_transcribe_tokens(model: str, result: str, usage: UsageTransc
     csv_token_logger_realtime_transcription.record(model, result, usage)
 
 
-async def save_wav_chunk(pcm_bytes: bytes, suffix: str) -> str:
-    """Save PCM16 audio to a WAV file asynchronously."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
-    filename = f"audio_{timestamp}_{suffix}.wav"
-
-    bytes_per_frame = CHANNELS * 2  # 2 bytes per sample (16-bit PCM)
-    num_frames = len(pcm_bytes) // bytes_per_frame
-    duration_sec = num_frames / SAMPLE_RATE
-
-    path = os.path.join(AUDIO_DIR, filename)
-
-    def _save():
-        log.debug('Saving wav chunk to %s', filename)
-        with wave.open(path, "wb") as wf:
-            wf.setnchannels(CHANNELS)
-            wf.setsampwidth(2)
-            wf.setframerate(SAMPLE_RATE)
-            wf.writeframes(pcm_bytes)
-        log.info('Saved wav chunk to %s, length %.3f seconds', path, duration_sec)
-
-    await asyncio.to_thread(_save)
-    return path
-
-
-class SessionDisplay(Static):
-    """A widget that shows the current session ID."""
-
-    session_id = reactive("")
-
-    @override
-    def render(self) -> str:
-        return f"Session ID: {self.session_id}" if self.session_id else "Connecting..."
-
-
-class AudioStatusIndicator(Static):
-    """A widget that shows the current audio recording status."""
-
-    is_recording = reactive(False)
-
-    @override
-    def render(self) -> str:
-        status = (
-            "🔴 Recording... (Press K to stop)" if self.is_recording else "⚪ Press K to start recording (Q to quit)"
-        )
-        return status
-
-
 class RealtimeApp(App[None]):
-    CSS = """
-        Screen {
-            background: #1a1b26;  /* Dark blue-grey background */
-        }
-
-        Container {
-            layout: vertical;
-            height: 100%;
-            border: double rgb(91, 164, 91);
-        }
-
-        Horizontal {
-            width: 100%;
-        }
-
-        #middle-pane {
-            width: 100%;
-            height: 25%;  /* Reduced to make room for session display */
-            border: round rgb(205, 133, 63);
-            content-align: center middle;
-        }
-
-        #lower-middle-pane {
-            width: 100%;
-            height: 25%;  /* Reduced to make room for session display */
-            border: round rgb(205, 133, 63);
-            content-align: center middle;
-        }
-
-        #bottom-pane {
-            width: 100%;
-            height: 75%;  /* Reduced to make room for session display */
-            border: round rgb(205, 133, 63);
-        }
-
-        #status-row {
-            height: 3;
-            width: 100%;
-            layout: horizontal;
-            content-align: center middle;
-            margin: 1 1;
-        }
-
-        #session-row {
-            height: 3;
-            width: 100%;
-            layout: horizontal;
-            content-align: center middle;
-            margin: 1 1;
-        }
-
-        #status-indicator {
-            content-align: center middle;
-            width: 1fr;
-            height: 3;
-            background: #2a2b36;
-            border: solid rgb(91, 164, 91);
-            padding: 0 1;
-        }
-
-        #send-button {
-            width: 12;
-            height: 3;
-            margin-left: 1;
-            background: #2a2b36;
-            border: solid rgb(91, 164, 91);
-        }
-
-        #quit-button {
-            width: 12;
-            height: 3;
-            margin-left: 1;
-            background: #2a2b36;
-            border: solid rgb(91, 164, 91);
-        }
-
-        #session-display {
-            height: 3;
-            width: 1fr;
-            content-align: center middle;
-            background: #2a2b36;
-            border: solid rgb(91, 164, 91);
-            padding: 0 1;
-        }
-
-        #amp-graph {
-            width: 24;
-            height: 3;
-            margin-left: 1;
-            background: #2a2b36;
-            border: solid rgb(91, 164, 91);
-        }
-
-        Static {
-            color: white;
-        }
-    """
-
+    CSS = CSS
     client: AsyncOpenAI
     should_send_audio: asyncio.Event
     audio_player: AudioPlayerAsync
@@ -304,9 +119,13 @@ class RealtimeApp(App[None]):
     connection: AsyncRealtimeConnection | None
     session: Session | None
     connected: asyncio.Event
+    handle_realtime_connection_worker: Worker | None = None
+    send_mic_audio_worker: Worker | None = None
 
     def __init__(self) -> None:
         super().__init__()
+        self.config_manager = ConfigManager()
+        self.user_config = self.config_manager.load()
         self.connection = None
         self.session = None
         self.client = AsyncOpenAI()
@@ -320,10 +139,10 @@ class RealtimeApp(App[None]):
     async def cleanup_resources(self):
         self.log("The app is unmounting now!")
         await asyncio.gather(
-            asyncio.to_thread(token_logger_realtime.close()),
-            asyncio.to_thread(token_logger_realtime_transcription.close()),
-            asyncio.to_thread(csv_token_logger_realtime.close()),
-            asyncio.to_thread(csv_writer_realtime_transcribe.close())
+            asyncio.to_thread(token_logger_realtime.close),
+            asyncio.to_thread(token_logger_realtime_transcription.close),
+            asyncio.to_thread(csv_token_logger_realtime.close),
+            asyncio.to_thread(csv_writer_realtime_transcribe.close)
         )
 
     @override
@@ -336,6 +155,7 @@ class RealtimeApp(App[None]):
             with Horizontal(id="status-row"):
                 yield AudioStatusIndicator(id="status-indicator")
                 yield Button("Record", id="send-button")
+                yield Button("Config", id="config-button")
                 yield Button("Quit", id="quit-button")
             yield RichLog(id="middle-pane", wrap=True, highlight=True, markup=True)
             yield RichLog(id="lower-middle-pane", wrap=True, highlight=True, markup=True)
@@ -358,8 +178,17 @@ class RealtimeApp(App[None]):
         textual_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s"))
         logging.getLogger("realtime_app").addHandler(textual_handler)
 
-        self.run_worker(self.handle_realtime_connection())
-        self.run_worker(self.send_mic_audio())
+        self.restart_workers()
+
+    def restart_workers(self):
+        if self.handle_realtime_connection_worker and not self.handle_realtime_connection_worker.is_finished:
+            self.handle_realtime_connection_worker.cancel()
+
+        if self.send_mic_audio_worker and not self.send_mic_audio_worker.is_finished:
+            self.send_mic_audio_worker.cancel()
+
+        self.handle_realtime_connection_worker = self.run_worker(self.handle_realtime_connection())
+        self.send_mic_audio_worker = self.run_worker(self.send_mic_audio())
 
         async def listen_once():
             await asyncio.sleep(1)
@@ -379,26 +208,51 @@ class RealtimeApp(App[None]):
         pane.write(message.text)
 
     async def handle_realtime_connection(self) -> None:
-        async with self.client.realtime.connect(model=MODEL) as conn:
+        async with self.client.realtime.connect(model=self.user_config['model']) as conn:
             self.connection = conn
             self.connected.set()
 
             # note: this is the default and can be omitted
             # if you want to manually handle VAD yourself, then set `'turn_detection': None`
 
-            log.info("Starting session with model %s, prompt %s", MODEL, PROMPT)
-            log.info("Turn Detection: %s", TURN_DETECTION)
+            turn_detection: ServerVad | SemanticVad | None = None
+            mode = self.user_config['mode']
+
+            if mode == "server":
+                turn_detection: ServerVad = {
+                    "type": "server_vad",
+                    "idle_timeout_ms": 5000
+                }
+            elif mode == "semantic":
+                turn_detection: SemanticVad = {
+                    "type": "semantic_vad",
+                    "eagerness": "high"
+                }
+
+            if self.user_config['transcription_enabled']:
+                transcription_info = {
+                    "language": LANGUAGE,
+                    "model": TRANSCRIPTION_MODEL,
+                }
+            else:
+                transcription_info = None
+
+            log.info("Starting session with model %s, prompt %s",
+                     self.user_config['model'], self.user_config['prompt'])
+            log.info("Turn Detection: %s", turn_detection)
+            log.info("Transcription Info: %s", transcription_info)
+
 
             await conn.session.update(
                 session={
                     "audio": {
-                        "input": {"turn_detection": TURN_DETECTION,
-                                  "transcription": TRANSCRIPTION_INFO
+                        "input": {"turn_detection": turn_detection,
+                                  "transcription": transcription_info
                                   },
                     },
-                    "instructions": PROMPT,
+                    "instructions": self.user_config['prompt'],
                     "output_modalities": OUTPUT_MODALITIES,
-                    "model": MODEL,
+                    "model": self.user_config['model'],
                     "type": "realtime",
                 }
             )
@@ -429,7 +283,7 @@ class RealtimeApp(App[None]):
                         self.last_audio_item_id = event.item_id
 
                     bytes_data = base64.b64decode(event.delta)
-                    if PLAY_AUDIO:
+                    if self.user_config['play_audio']:
                         self.audio_player.add_data(bytes_data)
                     continue
 
@@ -490,7 +344,7 @@ class RealtimeApp(App[None]):
 
                     if usage := getattr(event, "usage"):
                         log.debug("Type: %s", type(usage))
-                        await asyncio.to_thread(write_realtime_transcribe_tokens, MODEL, text, usage)
+                        await asyncio.to_thread(write_realtime_transcribe_tokens, self.user_config['model'], text, usage)
                     else:
                         log.warning("No token usage info in transcription response.")
                         continue
@@ -538,7 +392,7 @@ class RealtimeApp(App[None]):
                         log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
                     if usage := getattr(event.response, "usage"):
                         await asyncio.to_thread(write_realtime_tokens,
-                                                MODEL,
+                                                self.user_config['model'],
                                                 result,
                                                 usage
                                                 )
@@ -569,8 +423,10 @@ class RealtimeApp(App[None]):
         except asyncio.TimeoutError:
             log.error("Failed to update session, existing")
             self.exit()
+
         async with asyncio.TaskGroup() as tg:
             import sounddevice as sd  # type: ignore
+            amp_widget = self.query_one("#amp-graph", AmplitudeGraph)
 
             sent_audio = False
 
@@ -615,7 +471,6 @@ class RealtimeApp(App[None]):
                     rms = audioop.rms(data, 2)  # 2 bytes = 16-bit
                     peak = min(rms / 30000.0, 1.0)  # normalize to 0–1 range
 
-                    amp_widget = self.query_one("#amp-graph", AmplitudeGraph)
                     amp_widget.amplitude = peak
 
                     binary_data = data.tobytes()
@@ -624,16 +479,16 @@ class RealtimeApp(App[None]):
 
                     if not speech_ongoing.is_set():
                         if speech_done.is_set():
-                            tg.create_task(save_wav_chunk(wav_stream, "speech_done"))
+                            tg.create_task(save_wav_chunk(wav_stream, "speech_done", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
                             wav_stream = b''
                             speech_done.clear()
                         elif SAVE_SILENCE_AFTER_BYTES_MULTIPLIER and len(wav_stream) > (
                                 read_size * SAVE_SILENCE_AFTER_BYTES_MULTIPLIER):
-                            tg.create_task(save_wav_chunk(wav_stream, "periodic"))
+                            tg.create_task(save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
                             wav_stream = b''
                     elif SAVE_SPEECH_AFTER_BYTES_MULTIPLIER and len(wav_stream) > (
                             read_size * SAVE_SPEECH_AFTER_BYTES_MULTIPLIER):
-                        tg.create_task(save_wav_chunk(wav_stream, "speech"))
+                        tg.create_task(save_wav_chunk(wav_stream, "speech", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
                         wav_stream = b''
 
                     await asyncio.sleep(0)
@@ -642,9 +497,26 @@ class RealtimeApp(App[None]):
             finally:
                 if wav_stream:
                     tg.create_task(
-                        save_wav_chunk(wav_stream, "periodic"))
+                        save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
                 stream.stop()
                 stream.close()
+
+    def show_config(self) -> None:
+        self.push_screen(ConfigModal(), self.apply_config)
+
+    async def apply_config(self, new_config: dict | None) -> None:
+        if new_config:
+            self.user_config = new_config
+            self.config_manager.save(new_config)
+            self.notify("Settings Updated! Restarting session...")
+
+            # Logic: Refresh the OpenAI connection with new prompt/model
+            # You might need to trigger a session.update event here
+            await self.refresh_session()
+
+    async def refresh_session(self):
+        """Helper to push new config to the active OpenAI connection."""
+        self.restart_workers()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "send-button":
@@ -654,6 +526,8 @@ class RealtimeApp(App[None]):
         if event.button.id == "quit-button":
             log.info("Button pressed, quitting...")
             self.exit()
+        if event.button.id == "config-button":
+            self.show_config()
 
     async def toggle_recording(self) -> None:
         send_button = self.query_one("#send-button", Button)
@@ -716,24 +590,6 @@ class RealtimeApp(App[None]):
             await self.toggle_recording()
             return
 
-
-class TextualPaneLogHandler(Handler):
-    """
-    Logging handler that forwards log messages into the Textual app
-    using message posting (thread-safe).
-    """
-
-    def __init__(self, app: "RealtimeApp"):
-        super().__init__()
-        self.app = app
-
-    def emit(self, record: LogRecord):
-        try:
-            msg = self.format(record)
-            # Post message safely into Textual's event queue
-            self.app.post_message(TextualLogMessage(msg))
-        except Exception:
-            self.handleError(record)
 
 
 if __name__ == "__main__":
