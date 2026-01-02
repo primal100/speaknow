@@ -4,7 +4,8 @@ import base64
 import asyncio
 import logging.config
 import shutil
-from typing import Any, cast, override
+from typing import Any, cast
+from typing_extensions import override
 from textual import events
 import sounddevice as sd
 

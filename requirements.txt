@@ -1,6 +1,6 @@
 openai[realtime]>=1.51.0
-sounddevice>=0.4.6
-audioop-lts
+sounddevice
+audioop-lts; python_version >= '3.13'
 numpy
 pydub
 textual
