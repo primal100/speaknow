@@ -99,6 +99,8 @@ def write_realtime_transcribe_tokens(model: str, result: str, usage: UsageTransc
 
 
 class RealtimeApp(App[None]):
+    TITLE = "SpeakNow"
+    SUB_TITLE = "Realtime AI Voice Interface"
     CSS = CSS
     client: AsyncOpenAI
     should_send_audio: asyncio.Event
@@ -240,7 +242,6 @@ class RealtimeApp(App[None]):
                 log.info("Turn Detection: %s", turn_detection)
                 log.info("Transcription Info: %s", transcription_info)
 
-
                 await conn.session.update(
                     session={
                         "audio": {
@@ -249,7 +250,7 @@ class RealtimeApp(App[None]):
                                       },
                         },
                         "instructions": self.user_config['prompt'],
-                        "output_modalities": self.user_config['output_modalities'],
+                        "output_modalities": self.user_config.get('output_modalities'),
                         "model": self.user_config['model'],
                         "type": "realtime",
                     }
@@ -587,6 +588,10 @@ class RealtimeApp(App[None]):
         if event.key == "l":
             # To log for timing purposes
             log.info("Question sent...")
+            return
+
+        if event.key == "c":
+            self.show_config()
             return
 
         if event.key == "s":

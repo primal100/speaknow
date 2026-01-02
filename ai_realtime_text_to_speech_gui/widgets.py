@@ -103,7 +103,6 @@ class ConfigModal(ModalScreen[dict]):
             current_modalities = cfg.get("output_modalities", ["text", "audio"])
             yield Label("Output Modalities")
             with Horizontal(id="modalities-row"):
-                yield Checkbox("Text", value="text" in current_modalities, name="text", classes="modality-check")
                 yield Checkbox("Audio", value="audio" in current_modalities, name="audio", classes="modality-check")
 
             yield Label("Transcription Settings")

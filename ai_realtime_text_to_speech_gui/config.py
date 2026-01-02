@@ -13,7 +13,7 @@ class ConfigManager:
             "mode": "manual",
             "prompt": "Reply promptly. If a question is asked, answer it with just the answer.",
             "play_audio": True,
-            "output_modalities": ["text", "audio"],
+            "output_modalities": ["audio"],
             "transcription_enabled": True,
             "transcription_model": "gpt-4o-mini-transcribe",
             "language": "en",
