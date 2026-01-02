@@ -1,18 +1,17 @@
 import yaml
 from pathlib import Path
+from .directories import get_config_file
 
 
 class ConfigManager:
     def __init__(self):
-        self.config_dir = Path.home() / ".ai_realtime_gui"
-        self.config_file = self.config_dir / "config.yaml"
-        self.config_dir.mkdir(exist_ok=True)
+        self.config_file = get_config_file()
 
         # Default values if file doesn't exist
         self.defaults = {
             "model": "gpt-realtime-mini",
             "mode": "manual",
-            "prompt": "You are a quiz contestant who answers concisely and clearly and as quickly as possible with just the answer, no need for a full sentence. If the question is a statement or a true/false question, answer true or false first and then give extra context",
+            "prompt": "Reply promptly. If a question is asked, answer it with just the answer.",
             "play_audio": True,
             "output_modalities": ["text", "audio"],
             "transcription_enabled": True,
