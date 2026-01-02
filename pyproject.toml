@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "speaknow"
+version = "0.1.0"
+description = "Realtime AI Voice Interface using OpenAI Realtime API"
+requires-python = ">=3.11"
+authors = [
+    {name = "Paul Martin", email = "paulmartin4work@protonmail.com"}
+]
+dependencies = [
+    "openai[realtime]>=1.51.0",
+    "sounddevice",
+    "audioop-lts; python_version >= '3.13'",
+    "numpy",
+    "pydub",
+    "textual",
+    "textual-dev",
+    "textual_serve",
+    "PyYAML",
+    # "gpt_token_tracker", # Replace with this once tracker is on PyPI
+]
+
+[project.scripts]
+speaknow = "speaknow:run"
+speaknow-serve = "speaknow_serve:run"
+
+[tool.setuptools]
+py-modules = ["speaknow", "speaknow_serve"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["speaknow_ai_realtime_text_to_speech*"]

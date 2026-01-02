@@ -8,7 +8,7 @@ from textual.widget import Widget
 from textual.widgets import Static, Input, Label, Select, Checkbox, Button
 from textual.app import ComposeResult
 from logging import Handler, LogRecord
-from typing import override
+from typing_extensions import override
 
 
 class AmplitudeGraph(Widget):
