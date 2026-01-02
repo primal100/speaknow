@@ -4,7 +4,7 @@ import base64
 import asyncio
 import os
 import logging.config
-from typing import Any, cast, override, Literal
+from typing import Any, cast, override
 from textual import events
 
 from ai_realtime_text_to_speech_gui.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
@@ -41,24 +41,10 @@ from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
 from gpt_token_tracker.writers.csv_writer import CSVWriter
 
 
-#MODEL: str = "gpt-realtime-mini"
 LOG_CONFIG_FILE = "logging.conf"
 BASE_LOG_DIR = "logs"
-#PLAY_AUDIO: bool = False
 AUDIO_DIR = "recordings"
 TOKENS_DIR = "tokens"
-SAVE_SILENCE_AFTER_BYTES_MULTIPLIER: int | None = 1000
-SAVE_SPEECH_AFTER_BYTES_MULTIPLIER: int | None = None
-
-#MODE: Literal["manual", "server", "semantic"] = "manual"
-# PROMPT: str = "You are a quiz contestant who answers concisely and clearly a"nd as quickly as possible with just the answer, no need for a full sentence or json, just plaintext"
-#PROMPT: str = "You are a quiz contestant who answers concisely and clearly and as quickly as possible with just the answer, no need for a full sentence. If the question is a statement or a true/false question, answer true or false first and then give extra context"
-IMMEDIATE_INITIALISATION_TIME: int | None = 10
-OUTPUT_MODALITIES: list[Literal["text", "audio"]] = ["text"]  # Audio is way more responsive
-#TRANSCRIPTION_REALTIME_ENABLED = True
-TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
-LANGUAGE = "en"
-
 
 
 REALTIME_COSTS = {
@@ -84,11 +70,6 @@ logging.config.fileConfig(LOG_CONFIG_FILE, disable_existing_loggers=False)
 log = logging.getLogger("realtime_app")
 transcript_log = logging.getLogger("transcripts")
 events_log = logging.getLogger("events")
-
-session_updated = asyncio.Event()
-response_in_progress = asyncio.Event()
-speech_ongoing = asyncio.Event()
-speech_done = asyncio.Event()
 
 
 log_writer = LogWriter("realtime_tokens")
@@ -130,6 +111,13 @@ class RealtimeApp(App[None]):
         self.session = None
         self.client = AsyncOpenAI()
         self.audio_player = AudioPlayerAsync()
+
+        self.session_updated = asyncio.Event()
+        self.response_in_progress = asyncio.Event()
+        self.speech_ongoing = asyncio.Event()
+        self.speech_done = asyncio.Event()
+        self.connection_cancelled = asyncio.Event()
+        self.connection_cancelled.set()
         self.last_audio_item_id = None
         self.should_send_audio = asyncio.Event()
         self.connected = asyncio.Event()
@@ -173,34 +161,35 @@ class RealtimeApp(App[None]):
         handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s"))
 
         logging.getLogger("realtime_app").addHandler(handler)
+        logging.getLogger("realtime_tokens").addHandler(handler)
         textual_handler = TextualHandler()
         textual_handler.setLevel(logging.DEBUG)
         textual_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s"))
         logging.getLogger("realtime_app").addHandler(textual_handler)
 
-        self.restart_workers()
+        await self.restart_workers()
 
-    def restart_workers(self):
+    async def restart_workers(self):
+        log.debug("Cancelling mic audio worker")
+        if self.send_mic_audio_worker and not self.send_mic_audio_worker.is_finished:
+            self.send_mic_audio_worker.cancel()
+
+        log.debug("Cancelling realtime connection worker")
         if self.handle_realtime_connection_worker and not self.handle_realtime_connection_worker.is_finished:
             self.handle_realtime_connection_worker.cancel()
 
-        if self.send_mic_audio_worker and not self.send_mic_audio_worker.is_finished:
-            self.send_mic_audio_worker.cancel()
+        await self.connection_cancelled.wait()
 
         self.handle_realtime_connection_worker = self.run_worker(self.handle_realtime_connection())
         self.send_mic_audio_worker = self.run_worker(self.send_mic_audio())
 
-        async def listen_once():
+        async def listen_immediately():
             await asyncio.sleep(1)
             # Simulate pressing lowercase "k"
             await self.toggle_recording()
 
-            await asyncio.sleep(IMMEDIATE_INITIALISATION_TIME)
-            log.info('Runtime finshed, existing...')
-            await self.toggle_recording()
-
-        if IMMEDIATE_INITIALISATION_TIME:
-            self.run_worker(listen_once())
+        if self.user_config['immediate_initialisation']:
+            self.run_worker(listen_immediately())
 
     async def on_textual_log_message(self, message: TextualLogMessage) -> None:
         """Receive log messages sent by the log handler and write them to the pane."""
@@ -208,209 +197,217 @@ class RealtimeApp(App[None]):
         pane.write(message.text)
 
     async def handle_realtime_connection(self) -> None:
-        async with self.client.realtime.connect(model=self.user_config['model']) as conn:
-            self.connection = conn
-            self.connected.set()
+        self.connection_cancelled.clear()
+        try:
+            async with self.client.realtime.connect(model=self.user_config['model']) as conn:
+                self.connection = conn
+                self.connected.set()
 
-            # note: this is the default and can be omitted
-            # if you want to manually handle VAD yourself, then set `'turn_detection': None`
+                # note: this is the default and can be omitted
+                # if you want to manually handle VAD yourself, then set `'turn_detection': None`
 
-            turn_detection: ServerVad | SemanticVad | None = None
-            mode = self.user_config['mode']
+                turn_detection: ServerVad | SemanticVad | None = None
+                mode = self.user_config['mode']
 
-            if mode == "server":
-                turn_detection: ServerVad = {
-                    "type": "server_vad",
-                    "idle_timeout_ms": 5000
-                }
-            elif mode == "semantic":
-                turn_detection: SemanticVad = {
-                    "type": "semantic_vad",
-                    "eagerness": "high"
-                }
+                if mode == "server":
+                    turn_detection: ServerVad = {
+                        "type": "server_vad",
+                        "idle_timeout_ms": 5000
+                    }
+                elif mode == "semantic":
+                    turn_detection: SemanticVad = {
+                        "type": "semantic_vad",
+                        "eagerness": "high"
+                    }
 
-            if self.user_config['transcription_enabled']:
-                transcription_info = {
-                    "language": LANGUAGE,
-                    "model": TRANSCRIPTION_MODEL,
-                }
-            else:
-                transcription_info = None
+                if self.user_config['transcription_enabled']:
+                    transcription_info = {
+                        "language": self.user_config['language'],
+                        "model": self.user_config['transcription_model'],
+                    }
+                else:
+                    transcription_info = None
 
-            log.info("Starting session with model %s, prompt %s",
-                     self.user_config['model'], self.user_config['prompt'])
-            log.info("Turn Detection: %s", turn_detection)
-            log.info("Transcription Info: %s", transcription_info)
+                log.info("Updating session with model %s, prompt %s",
+                         self.user_config['model'], self.user_config['prompt'])
+                log.info("Turn Detection: %s", turn_detection)
+                log.info("Transcription Info: %s", transcription_info)
 
 
-            await conn.session.update(
-                session={
-                    "audio": {
-                        "input": {"turn_detection": turn_detection,
-                                  "transcription": transcription_info
-                                  },
-                    },
-                    "instructions": self.user_config['prompt'],
-                    "output_modalities": OUTPUT_MODALITIES,
-                    "model": self.user_config['model'],
-                    "type": "realtime",
-                }
-            )
+                await conn.session.update(
+                    session={
+                        "audio": {
+                            "input": {"turn_detection": turn_detection,
+                                      "transcription": transcription_info
+                                      },
+                        },
+                        "instructions": self.user_config['prompt'],
+                        "output_modalities": self.user_config['output_modalities'],
+                        "model": self.user_config['model'],
+                        "type": "realtime",
+                    }
+                )
 
-            acc_items: dict[str, Any] = {}
-            transcription_items: dict[str, Any] = {}
-            speech_start_times: dict[str, datetime] = {}
+                acc_items: dict[str, Any] = {}
+                transcription_items: dict[str, Any] = {}
+                speech_start_times: dict[str, datetime] = {}
 
-            async for event in conn:
-                events_log.info("Event Type: %s. Item Id: %s", event.type, getattr(event, "item_id", ""))
-                events_log.debug(event)
-                if event.type == "session.created":
-                    self.session = event.session
-                    session_display = self.query_one(SessionDisplay)
-                    assert event.session.id is not None
-                    session_display.session_id = event.session.id
-                    continue
+                async for event in conn:
+                    events_log.info("Event Type: %s. Item Id: %s", event.type, getattr(event, "item_id", ""))
+                    events_log.debug(event)
+                    if event.type == "session.created":
+                        self.session = event.session
+                        session_display = self.query_one(SessionDisplay)
+                        assert event.session.id is not None
+                        session_display.session_id = event.session.id
+                        continue
 
-                if event.type == "session.updated":
-                    session_updated.set()
-                    self.session = event.session
-                    continue
+                    if event.type == "session.updated":
+                        self.session_updated.set()
+                        self.session = event.session
+                        continue
 
-                if event.type == "response.output_audio.delta":
-                    if event.item_id != self.last_audio_item_id:
-                        log.info("First audio response received for %s", event.item_id)
-                        self.audio_player.reset_frame_count()
-                        self.last_audio_item_id = event.item_id
+                    if event.type == "response.output_audio.delta":
+                        if event.item_id != self.last_audio_item_id:
+                            log.info("First audio response received for %s", event.item_id)
+                            self.audio_player.reset_frame_count()
+                            self.last_audio_item_id = event.item_id
 
-                    bytes_data = base64.b64decode(event.delta)
-                    if self.user_config['play_audio']:
-                        self.audio_player.add_data(bytes_data)
-                    continue
+                        bytes_data = base64.b64decode(event.delta)
+                        if self.user_config['play_audio']:
+                            self.audio_player.add_data(bytes_data)
+                        continue
 
-                if event.type == "response.output_audio_transcript.delta" or event.type == "response.output_text.delta":
-                    try:
-                        text = acc_items[event.item_id]
-                    except KeyError:
+                    if event.type == "response.output_audio_transcript.delta" or event.type == "response.output_text.delta":
+                        try:
+                            text = acc_items[event.item_id]
+                        except KeyError:
+                            parts = event.type.split(".")
+                            category = parts[1].replace("_", " ") if len(parts) > 1 else "unknown"
+                            log.info("First %s response received for %s", category, event.item_id)
+                            acc_items[event.item_id] = event.delta
+                        else:
+                            acc_items[event.item_id] = text + event.delta
+
+                        # Clear and update the entire content because RichLog otherwise treats each delta as a new line
+                        lower_middle_pane = self.query_one("#lower-middle-pane", RichLog)
+                        lower_middle_pane.clear()
+                        lower_middle_pane.write(event.item_id)
+                        lower_middle_pane.write(acc_items[event.item_id])
+                        continue
+
+                    if event.type == "response.output_audio_transcript.complete" or event.type == "response.output_text.complete" or event.type == "response.output_item.complete":
                         parts = event.type.split(".")
                         category = parts[1].replace("_", " ") if len(parts) > 1 else "unknown"
-                        log.info("First %s response received for %s", category, event.item_id)
-                        acc_items[event.item_id] = event.delta
-                    else:
-                        acc_items[event.item_id] = text + event.delta
+                        log.debug("%s done for %s", category, event.item_id)
+                        final_text = event.item.text
+                        try:
+                            transcription_items[event.item_id]
+                        except KeyError:
+                            transcription_items[event.item_id] = final_text
+                        log.info("Answer: %s", final_text)
 
-                    # Clear and update the entire content because RichLog otherwise treats each delta as a new line
-                    lower_middle_pane = self.query_one("#lower-middle-pane", RichLog)
-                    lower_middle_pane.clear()
-                    lower_middle_pane.write(event.item_id)
-                    lower_middle_pane.write(acc_items[event.item_id])
-                    continue
+                    if event.type == "conversation.item.input_audio_transcription.delta":
+                        try:
+                            text = transcription_items[event.item_id]
+                        except KeyError:
+                            log.info("First realtime audio transcription response received for %s", event.item_id)
+                            transcription_items[event.item_id] = event.delta
+                        else:
+                            transcription_items[event.item_id] = text + event.delta
 
-                if event.type == "response.output_audio_transcript.complete" or event.type == "response.output_text.complete" or event.type == "response.output_item.complete":
-                    parts = event.type.split(".")
-                    category = parts[1].replace("_", " ") if len(parts) > 1 else "unknown"
-                    log.debug("%s done for %s", category, event.item_id)
-                    final_text = event.item.text
-                    try:
-                        transcription_items[event.item_id]
-                    except KeyError:
-                        transcription_items[event.item_id] = final_text
-                    log.info("Answer: %s", final_text)
-
-                if event.type == "conversation.item.input_audio_transcription.delta":
-                    try:
-                        text = transcription_items[event.item_id]
-                    except KeyError:
-                        log.info("First realtime audio transcription response received for %s", event.item_id)
-                        transcription_items[event.item_id] = event.delta
-                    else:
-                        transcription_items[event.item_id] = text + event.delta
-
-                    # Clear and update the entire content because RichLog otherwise treats each delta as a new line
-                    middle_pane = self.query_one("#middle-pane", RichLog)
-                    middle_pane.clear()
-                    middle_pane.write(event.item_id)
-                    middle_pane.write(transcription_items[event.item_id])
-                    continue
-
-                if event.type == "conversation.item.input_audio_transcription.completed":
-                    log.debug("Audio realtime transcription response done for %s", event.item_id)
-                    log.debug("Type: %s", type(event))
-                    try:
-                        text = transcription_items[event.item_id]
-                    except KeyError:
-                        transcription_items[event.item_id] = event.transcript
-                        text = transcription_items[event.item_id]
-                    log.info("[TRANSCRIPTION] REALTIME: %s", text)
-
-                    if usage := getattr(event, "usage"):
-                        log.debug("Type: %s", type(usage))
-                        await asyncio.to_thread(write_realtime_transcribe_tokens, self.user_config['model'], text, usage)
-                    else:
-                        log.warning("No token usage info in transcription response.")
+                        # Clear and update the entire content because RichLog otherwise treats each delta as a new line
+                        middle_pane = self.query_one("#middle-pane", RichLog)
+                        middle_pane.clear()
+                        middle_pane.write(event.item_id)
+                        middle_pane.write(transcription_items[event.item_id])
                         continue
 
-                    continue
+                    if event.type == "conversation.item.input_audio_transcription.completed":
+                        log.debug("Audio realtime transcription response done for %s", event.item_id)
+                        log.debug("Type: %s", type(event))
+                        try:
+                            text = transcription_items[event.item_id]
+                        except KeyError:
+                            transcription_items[event.item_id] = event.transcript
+                            text = transcription_items[event.item_id]
+                        log.info("[TRANSCRIPTION] REALTIME: %s", text)
 
-                if event.type == "response.created":
-                    response_in_progress.set()
-                    log.info("%s Response is being created", event.response.id)
-                    continue
+                        if usage := getattr(event, "usage"):
+                            log.debug("Type: %s", type(usage))
+                            await asyncio.to_thread(write_realtime_transcribe_tokens, self.user_config['model'], text, usage)
+                        else:
+                            log.warning("No token usage info in transcription response.")
+                            continue
 
-                if event.type == "input_audio_buffer.speech_started":
-                    speech_ongoing.set()
-                    speech_done.clear()
-                    speech_start_times[event.item_id] = datetime.now()
-                    log.info("%s Speech started", event.item_id)
-                    continue
-
-                if event.type == "input_audio_buffer.speech_stopped":
-                    speech_done.set()
-                    speech_ongoing.clear()
-                    end = datetime.now()
-                    start = speech_start_times.get(event.item_id)
-                    if start:
-                        duration = (end - start).total_seconds()
-                        log.info("Speech ended for %s, %.3f seconds detected", event.item_id, duration)
-                    else:
-                        log.warning("Speech ended event for %s with no matching start time", event.item_id)
-                    continue
-
-                if event.type == "response.done":
-                    response_in_progress.clear()
-                    status = event.response.status
-                    status_details = event.response.status_details
-                    result = None
-                    if output := event.response.output:
-                        item = output[0]
-                        if content := getattr(item, "content", None):
-                            result = getattr(content[0], "text", None)
-                    if status_details:
-                        log.info("%s Response is done, status: %s, type: %s, reason: %s, error: %s, result: %s",
-                                 event.response.id, status, status_details.type,
-                                 status_details.reason, status_details.error, result)
-                    else:
-                        log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
-                    if usage := getattr(event.response, "usage"):
-                        await asyncio.to_thread(write_realtime_tokens,
-                                                self.user_config['model'],
-                                                result,
-                                                usage
-                                                )
-                    else:
-                        log.warning("No token usage info in response.")
                         continue
 
-                    if event.type == "rate_limits.updated":
-                        for rl in event.rate_limits:
-                            log.debug(
-                                "[RATE LIMIT] name=%s | limit=%s | remaining=%s | reset_in=%.3fs",
-                                rl.name,
-                                rl.limit,
-                                rl.remaining,
-                                rl.reset_seconds,
-                            )
+                    if event.type == "response.created":
+                        self.response_in_progress.set()
+                        log.info("%s Response is being created", event.response.id)
+                        continue
 
-                    continue
+                    if event.type == "input_audio_buffer.speech_started":
+                        self.speech_ongoing.set()
+                        self.speech_done.clear()
+                        speech_start_times[event.item_id] = datetime.now()
+                        log.info("%s Speech started", event.item_id)
+                        continue
+
+                    if event.type == "input_audio_buffer.speech_stopped":
+                        self.speech_done.set()
+                        self.speech_ongoing.clear()
+                        end = datetime.now()
+                        start = speech_start_times.get(event.item_id)
+                        if start:
+                            duration = (end - start).total_seconds()
+                            log.info("Speech ended for %s, %.3f seconds detected", event.item_id, duration)
+                        else:
+                            log.warning("Speech ended event for %s with no matching start time", event.item_id)
+                        continue
+
+                    if event.type == "response.done":
+                        self.response_in_progress.clear()
+                        status = event.response.status
+                        status_details = event.response.status_details
+                        result = None
+                        if output := event.response.output:
+                            item = output[0]
+                            if content := getattr(item, "content", None):
+                                result = getattr(content[0], "text", None)
+                        if status_details:
+                            log.info("%s Response is done, status: %s, type: %s, reason: %s, error: %s, result: %s",
+                                     event.response.id, status, status_details.type,
+                                     status_details.reason, status_details.error, result)
+                        else:
+                            log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
+                        if usage := getattr(event.response, "usage"):
+                            await asyncio.to_thread(write_realtime_tokens,
+                                                    self.user_config['model'],
+                                                    result,
+                                                    usage
+                                                    )
+                        else:
+                            log.warning("No token usage info in response.")
+                            continue
+
+                        if event.type == "rate_limits.updated":
+                            for rl in event.rate_limits:
+                                log.debug(
+                                    "[RATE LIMIT] name=%s | limit=%s | remaining=%s | reset_in=%.3fs",
+                                    rl.name,
+                                    rl.limit,
+                                    rl.remaining,
+                                    rl.reset_seconds,
+                                )
+
+                        continue
+        finally:
+            log.debug('Clearing events')
+            self.session_updated.clear()
+            self.connected.clear()
+            self.connection = None
+            self.connection_cancelled.set()
 
     async def _get_connection(self) -> AsyncRealtimeConnection:
         await self.connected.wait()
@@ -418,8 +415,9 @@ class RealtimeApp(App[None]):
         return self.connection
 
     async def send_mic_audio(self) -> None:
+        log.info("Starting mic audio task")
         try:
-            await asyncio.wait_for(session_updated.wait(), timeout=10)
+            await asyncio.wait_for(self.session_updated.wait(), timeout=10)
         except asyncio.TimeoutError:
             log.error("Failed to update session, existing")
             self.exit()
@@ -461,7 +459,7 @@ class RealtimeApp(App[None]):
 
                     connection = await self._get_connection()
                     if not sent_audio:
-                        if response_in_progress.is_set():
+                        if self.response_in_progress.is_set():
                             log.info("Sending initial cancel response...")
                             await connection.send({"type": "response.cancel"})
                         sent_audio = True
@@ -477,17 +475,20 @@ class RealtimeApp(App[None]):
 
                     wav_stream += binary_data
 
-                    if not speech_ongoing.is_set():
-                        if speech_done.is_set():
+                    if not self.speech_ongoing.is_set():
+                        if self.speech_done.is_set():
+                            log.info("Saving speech done chunk")
                             tg.create_task(save_wav_chunk(wav_stream, "speech_done", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
                             wav_stream = b''
-                            speech_done.clear()
-                        elif SAVE_SILENCE_AFTER_BYTES_MULTIPLIER and len(wav_stream) > (
-                                read_size * SAVE_SILENCE_AFTER_BYTES_MULTIPLIER):
+                            self.speech_done.clear()
+                        elif self.user_config["save_silence_multiplier"] and len(wav_stream) > (
+                                read_size * self.user_config["save_silence_multiplier"]):
+                            log.debug("Saving silence chunk")
                             tg.create_task(save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
                             wav_stream = b''
-                    elif SAVE_SPEECH_AFTER_BYTES_MULTIPLIER and len(wav_stream) > (
-                            read_size * SAVE_SPEECH_AFTER_BYTES_MULTIPLIER):
+                    elif self.user_config["save_speech_multiplier"] and len(wav_stream) > (
+                            read_size * self.user_config["save_speech_multiplier"]):
+                        log.debug("Saving speech chunk")
                         tg.create_task(save_wav_chunk(wav_stream, "speech", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
                         wav_stream = b''
 
@@ -495,11 +496,13 @@ class RealtimeApp(App[None]):
             except KeyboardInterrupt:
                 pass
             finally:
+                log.debug("Stopping mic stream in finally...")
                 if wav_stream:
-                    tg.create_task(
-                        save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
+                    log.debug("Saving final chunk")
+                    await save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, AUDIO_DIR)
                 stream.stop()
                 stream.close()
+                log.debug(tg._tasks)
 
     def show_config(self) -> None:
         self.push_screen(ConfigModal(), self.apply_config)
@@ -508,6 +511,8 @@ class RealtimeApp(App[None]):
         if new_config:
             self.user_config = new_config
             self.config_manager.save(new_config)
+            log.info("Settings Updated! Restarting session.")
+            log.info(self.user_config)
             self.notify("Settings Updated! Restarting session...")
 
             # Logic: Refresh the OpenAI connection with new prompt/model
@@ -516,7 +521,7 @@ class RealtimeApp(App[None]):
 
     async def refresh_session(self):
         """Helper to push new config to the active OpenAI connection."""
-        self.restart_workers()
+        await self.restart_workers()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "send-button":
