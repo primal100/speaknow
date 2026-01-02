@@ -23,6 +23,12 @@ To install the latest version from PyPI, run:
 pip install speaknow
 ```
 
+For linux, portaudio19-dev and ffmpeg are required. For example, to install on Ubuntu:
+
+```bash
+sudo apt install portaudio19-dev ffmpeg
+```
+
 ## Usage
 
 ### Configuration
