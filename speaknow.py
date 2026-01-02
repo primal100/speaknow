@@ -7,7 +7,13 @@ import shutil
 from typing import Any, cast
 from typing_extensions import override
 from textual import events
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except OSError:
+    print("Install postaudio19-dev and ffmpeg")
+    print("For example in Debian or Ubuntu:")
+    print("sudo apt install portaudio19-dev ffmpeg")
+    raise
 
 from speaknow_ai_realtime_text_to_speech.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
 import audioop

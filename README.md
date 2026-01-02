@@ -23,6 +23,12 @@ To install the latest version from PyPI, run:
 pip install speaknow
 ```
 
+For linux, portaudio19-dev and ffmpeg are required. For example, to install on Ubuntu:
+
+```bash
+sudo apt install portaudio19-dev ffmpeg
+```
+
 ## Usage
 
 ### Configuration
@@ -66,3 +72,8 @@ Linux:
 speaknow-serve
 ```
 
+### Modes:
+The mode can be changed in configuration.
+Manual mode is triggered by hitting "Start," speaking and then hitting "Stop." to send the audio.
+Server VAD and uses periods of silence to automatically chunk the audio.
+Semantic VAD  uses a semantic classifier to detect when the user has finished speaking, based on the words they have uttered.
