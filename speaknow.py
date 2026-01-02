@@ -6,6 +6,7 @@ import os
 import logging.config
 from typing import Any, cast, override
 from textual import events
+import sounddevice as sd
 
 from ai_realtime_text_to_speech_gui.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
 import audioop
@@ -423,7 +424,6 @@ class RealtimeApp(App[None]):
             self.exit()
 
         async with asyncio.TaskGroup() as tg:
-            import sounddevice as sd  # type: ignore
             amp_widget = self.query_one("#amp-graph", AmplitudeGraph)
 
             sent_audio = False
