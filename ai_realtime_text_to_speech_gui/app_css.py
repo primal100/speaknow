@@ -61,28 +61,41 @@ CSS = """
         padding: 0 1;
     }
 
-    #send-button {
-        width: 12;
+/* Shared style for all main app buttons */
+    #send-button, #config-button, #quit-button {
+        width: 16;             /* Fixed width for rectangular look */
         height: 3;
         margin-left: 1;
-        background: #2a2b36;
-        border: solid rgb(91, 164, 91);
+        border: none;          /* Remove the thin line border */
+        text-style: bold;
+        content-align: center middle;
+    }
+
+    /* Specific colors to match the professional TUI feel */
+    #send-button {
+        background: #31ad62;   /* Green */
+        color: white;
     }
 
     #config-button {
-        width: 12;
-        height: 3;
-        margin-left: 1;
-        background: #2a2b36;
-        border: solid rgb(91, 164, 91);
+        background: #414868;   /* Slate Blue */
+        color: white;
     }
-    
+
     #quit-button {
-        width: 12;
-        height: 3;
-        margin-left: 1;
-        background: #2a2b36;
-        border: solid rgb(91, 164, 91);
+        background: #c94a5b;   /* Red */
+        color: white;
+    }
+
+    /* Interactivity states */
+/* Interactivity states */
+    #send-button:hover, #config-button:hover, #quit-button:hover {
+        tint: white 20%;  /* This makes the existing background look lighter */
+    }
+
+    #send-button:focus, #config-button:focus, #quit-button:focus {
+        background: #bbbbbb; 
+        color: black;
     }
 
     #session-display {
