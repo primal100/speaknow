@@ -11,7 +11,7 @@ authors = [
     {name = "Paul Martin", email = "paulmartin4work@protonmail.com"}
 ]
 dependencies = [
-    "openai[realtime]>=1.51.0",
+    "openai[realtime]",
     "sounddevice",
     "audioop-lts; python_version >= '3.13'",
     "numpy",
