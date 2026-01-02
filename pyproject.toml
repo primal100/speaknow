@@ -20,7 +20,7 @@ dependencies = [
     "textual-dev",
     "textual_serve",
     "PyYAML",
-    # "gpt_token_tracker", # Replace with this once tracker is on PyPI
+    "gpt-token-tracker"
 ]
 
 [project.scripts]

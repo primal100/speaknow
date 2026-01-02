@@ -97,10 +97,18 @@ CSS = """
         background: #bbbbbb; 
         color: black;
     }
-
+    #version-display {
+        height: 3;
+        width: 0.5fr;
+        content-align: left middle;
+        background: #2a2b36;
+        border: solid rgb(91, 164, 91);
+        padding: 0 1;
+    }
+    
     #session-display {
         height: 3;
-        width: 1fr;
+        width: 1.5fr;
         content-align: center middle;
         background: #2a2b36;
         border: solid rgb(91, 164, 91);

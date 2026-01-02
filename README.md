@@ -40,6 +40,12 @@ SpeakNow provides two main entry points for different use cases.
 ### 1. Standard Application
 Launch the main TUI application to start a real-time session:
 
+Windows:
+```powershell
+speaknow.exe
+```
+
+Linux:
 ```bash
 speaknow
 ```
@@ -49,6 +55,13 @@ speaknow
 
 ### 2. Web Service Mode
 Run a server-side version optimized for shared or remote environments:
+
+Windows:
+```powershell
+speaknow-serve.exe
+```
+
+Linux:
 ```bash
 speaknow-serve
 ```
