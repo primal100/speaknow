@@ -2,8 +2,8 @@
 
 import base64
 import asyncio
-import os
 import logging.config
+import shutil
 from typing import Any, cast, override
 from textual import events
 import sounddevice as sd
@@ -15,10 +15,11 @@ from pathlib import Path
 from datetime import datetime
 
 from ai_realtime_text_to_speech_gui.app_css import CSS
+from ai_realtime_text_to_speech_gui.directories import HOME, get_log_config_file, get_log_dir, get_recordings_dir, get_token_dir
 from ai_realtime_text_to_speech_gui.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
                                                     TextualLogMessage, TextualPaneLogHandler, ConfigModal)
 from ai_realtime_text_to_speech_gui.config import ConfigManager
-from ai_realtime_text_to_speech_gui.utils import save_wav_chunk
+from ai_realtime_text_to_speech_gui.utils import update_log_config, save_wav_chunk
 
 from textual.app import App, ComposeResult
 from textual import on
@@ -42,10 +43,10 @@ from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
 from gpt_token_tracker.writers.csv_writer import CSVWriter
 
 
-LOG_CONFIG_FILE = "logging.conf"
-BASE_LOG_DIR = "logs"
-AUDIO_DIR = "recordings"
-TOKENS_DIR = "tokens"
+LOG_CONFIG_FILE = get_log_config_file()
+BASE_LOG_DIR = get_log_dir()
+AUDIO_DIR = get_recordings_dir()
+TOKENS_DIR = get_token_dir()
 
 
 REALTIME_COSTS = {
@@ -59,17 +60,19 @@ REALTIME_COSTS = {
         "cached_audio_in": 0.40,
     }
 
-os.makedirs(BASE_LOG_DIR, exist_ok=True)
-os.makedirs(AUDIO_DIR, exist_ok=True)
-os.makedirs(TOKENS_DIR, exist_ok=True)
 
 REALTIME_CONVO_CSV = Path(TOKENS_DIR) / "realtime_conversation_tokens.csv"
 REALTIME_TOKENS_CSV = Path(TOKENS_DIR) / "realtime_transcribe_tokens.csv"
 
+if not LOG_CONFIG_FILE.exists():
+    PACKAGE_DIR = Path(__file__).resolve().parent
+    PACKAGE_LOG_CONFIG_DIR = PACKAGE_DIR / "logging.conf"
+    shutil.copy(PACKAGE_LOG_CONFIG_DIR, LOG_CONFIG_FILE)
+
+update_log_config(LOG_CONFIG_FILE, BASE_LOG_DIR)
 # Load logging config (.ini)
 logging.config.fileConfig(LOG_CONFIG_FILE, disable_existing_loggers=False)
 log = logging.getLogger("realtime_app")
-transcript_log = logging.getLogger("transcripts")
 events_log = logging.getLogger("events")
 
 
@@ -80,6 +83,9 @@ csv_writer_realtime = CSVWriter(REALTIME_CONVO_CSV)
 csv_writer_realtime_transcribe = CSVWriter(REALTIME_TOKENS_CSV)
 csv_token_logger_realtime = TokenLogger(csv_writer_realtime, PricingRealtime(REALTIME_COSTS))
 csv_token_logger_realtime_transcription = TokenLogger(csv_writer_realtime_transcribe, PricingAudioTranscription(REALTIME_COSTS))
+
+
+log.info('Using application directory: %s', HOME)
 
 
 def write_realtime_tokens(model: str, result: str, usage: RealtimeResponseUsage) -> None:
@@ -417,6 +423,7 @@ class RealtimeApp(App[None]):
 
     async def send_mic_audio(self) -> None:
         log.info("Starting mic audio task")
+        recordings_dir = get_recordings_dir()
         try:
             await asyncio.wait_for(self.session_updated.wait(), timeout=10)
         except asyncio.TimeoutError:
@@ -478,18 +485,18 @@ class RealtimeApp(App[None]):
                     if not self.speech_ongoing.is_set():
                         if self.speech_done.is_set():
                             log.info("Saving speech done chunk")
-                            tg.create_task(save_wav_chunk(wav_stream, "speech_done", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
+                            tg.create_task(save_wav_chunk(wav_stream, "speech_done", CHANNELS, SAMPLE_RATE, recordings_dir))
                             wav_stream = b''
                             self.speech_done.clear()
                         elif self.user_config["save_silence_multiplier"] and len(wav_stream) > (
                                 read_size * self.user_config["save_silence_multiplier"]):
                             log.debug("Saving silence chunk")
-                            tg.create_task(save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
+                            tg.create_task(save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, recordings_dir))
                             wav_stream = b''
                     elif self.user_config["save_speech_multiplier"] and len(wav_stream) > (
                             read_size * self.user_config["save_speech_multiplier"]):
                         log.debug("Saving speech chunk")
-                        tg.create_task(save_wav_chunk(wav_stream, "speech", CHANNELS, SAMPLE_RATE, AUDIO_DIR))
+                        tg.create_task(save_wav_chunk(wav_stream, "speech", CHANNELS, SAMPLE_RATE, recordings_dir))
                         wav_stream = b''
 
                     await asyncio.sleep(0)
@@ -499,7 +506,7 @@ class RealtimeApp(App[None]):
                 log.debug("Stopping mic stream in finally...")
                 if wav_stream:
                     log.debug("Saving final chunk")
-                    await save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, AUDIO_DIR)
+                    await save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, recordings_dir)
                 stream.stop()
                 stream.close()
                 log.debug(tg._tasks)
