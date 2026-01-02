@@ -16,7 +16,8 @@ from pathlib import Path
 from datetime import datetime
 
 from speaknow_ai_realtime_text_to_speech.app_css import CSS
-from speaknow_ai_realtime_text_to_speech.directories import HOME, get_log_config_file, get_log_dir, get_recordings_dir, get_token_dir
+from speaknow_ai_realtime_text_to_speech import version
+from speaknow_ai_realtime_text_to_speech.directories import APP_NAME, HOME, get_log_config_file, get_log_dir, get_recordings_dir, get_token_dir
 from speaknow_ai_realtime_text_to_speech.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
                                                          TextualLogMessage, TextualPaneLogHandler, ConfigModal)
 from speaknow_ai_realtime_text_to_speech.config import ConfigManager
@@ -26,7 +27,7 @@ from textual.app import App, ComposeResult
 from textual import on
 from textual.events import Unmount
 from textual.logging import TextualHandler
-from textual.widgets import Button, RichLog
+from textual.widgets import Button, RichLog, Static
 from textual.worker import Worker
 from textual.containers import Container, Horizontal
 
@@ -148,6 +149,7 @@ class RealtimeApp(App[None]):
         """Create child widgets for the app."""
         with Container():
             with Horizontal(id="session-row"):
+                yield Static(id="version-display", content=f"{APP_NAME} v{version}")
                 yield SessionDisplay(id="session-display")
                 yield AmplitudeGraph(id="amp-graph")
             with Horizontal(id="status-row"):
@@ -176,7 +178,7 @@ class RealtimeApp(App[None]):
         textual_handler.setLevel(logging.DEBUG)
         textual_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s"))
         logging.getLogger("realtime_app").addHandler(textual_handler)
-
+        log.info("Starting Realtime app version %s", version)
         await self.restart_workers()
 
     async def restart_workers(self):

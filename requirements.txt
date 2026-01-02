@@ -7,4 +7,4 @@ textual
 textual-dev
 textual_serve
 PyYAML
-git+ssh://git@github.com/primal100/gpt_token_tracker.git
+gpt-token-tracker
