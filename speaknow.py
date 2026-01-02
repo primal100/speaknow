@@ -8,18 +8,18 @@ from typing import Any, cast, override
 from textual import events
 import sounddevice as sd
 
-from ai_realtime_text_to_speech_gui.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
+from speaknow_ai_realtime_text_to_speech.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
 import audioop
 import time
 from pathlib import Path
 from datetime import datetime
 
-from ai_realtime_text_to_speech_gui.app_css import CSS
-from ai_realtime_text_to_speech_gui.directories import HOME, get_log_config_file, get_log_dir, get_recordings_dir, get_token_dir
-from ai_realtime_text_to_speech_gui.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
-                                                    TextualLogMessage, TextualPaneLogHandler, ConfigModal)
-from ai_realtime_text_to_speech_gui.config import ConfigManager
-from ai_realtime_text_to_speech_gui.utils import update_log_config, save_wav_chunk
+from speaknow_ai_realtime_text_to_speech.app_css import CSS
+from speaknow_ai_realtime_text_to_speech.directories import HOME, get_log_config_file, get_log_dir, get_recordings_dir, get_token_dir
+from speaknow_ai_realtime_text_to_speech.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
+                                                         TextualLogMessage, TextualPaneLogHandler, ConfigModal)
+from speaknow_ai_realtime_text_to_speech.config import ConfigManager
+from speaknow_ai_realtime_text_to_speech.utils import update_log_config, save_wav_chunk
 
 from textual.app import App, ComposeResult
 from textual import on
@@ -608,8 +608,9 @@ class RealtimeApp(App[None]):
             return
 
 
-
-if __name__ == "__main__":
+def run():
     app = RealtimeApp()
     app.run()
 
+if __name__ == "__main__":
+    run()
