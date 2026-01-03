@@ -3,9 +3,10 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "speaknow"
-version = "0.1.0"
+name = "speaknow-gui"
+version = "0.1.1"
 description = "Realtime AI Voice Interface using OpenAI Realtime API"
+readme = "README.md"
 requires-python = ">=3.11"
 authors = [
     {name = "Paul Martin", email = "paulmartin4work@protonmail.com"}

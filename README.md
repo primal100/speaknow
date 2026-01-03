@@ -20,7 +20,7 @@ SpeakNow requires **Python 3.11 or greater**.
 To install the latest version from PyPI, run:
 
 ```bash
-pip install speaknow
+pip install speaknow-gui
 ```
 
 For linux, portaudio19-dev and ffmpeg are required. For example, to install on Ubuntu:
