@@ -56,8 +56,8 @@ Linux:
 speaknow
 ```
 
-![GUI preview](images/gui_preview.png)
-![Config preview](images/config_preview.png)
+![GUI preview](https://raw.githubusercontent.com/primal100/speaknow/refs/heads/master/images/gui_preview.png)
+![Config preview](https://raw.githubusercontent.com/primal100/speaknow/refs/heads/master/images/config_preview.png)
 
 ### 2. Web Service Mode
 Run a server-side version optimized for shared or remote environments:
