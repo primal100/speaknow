@@ -50,6 +50,16 @@ from gpt_token_tracker.writers.log_writer import LogWriter
 from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
 from gpt_token_tracker.writers.csv_writer import CSVWriter
 
+# Ignore pydub warning in python 3.14
+# site-packages\pydub\utils.py:300: SyntaxWarning: "\(" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\("? A raw string is also an option.
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    category=SyntaxWarning,
+    module=r"pydub\..*",
+)
+
 
 LOG_CONFIG_FILE = get_log_config_file()
 BASE_LOG_DIR = get_log_dir()
@@ -184,7 +194,7 @@ class RealtimeApp(App[None]):
         textual_handler.setLevel(logging.DEBUG)
         textual_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s"))
         logging.getLogger("realtime_app").addHandler(textual_handler)
-        log.info("Starting Realtime app version %s", version)
+        log.info("Starting %s version %s", APP_NAME, version)
         await self.restart_workers()
 
     async def restart_workers(self):
