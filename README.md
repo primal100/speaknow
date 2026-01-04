@@ -23,6 +23,13 @@ To install the latest version from PyPI, run:
 pip install speaknow-gui
 ```
 
+On Windows ffmpeg is required:
+
+```bash
+winget install --id=Gyan.FFmpeg
+```
+
+
 For linux, portaudio19-dev and ffmpeg are required. For example, to install on Ubuntu:
 
 ```bash
@@ -42,6 +49,8 @@ export OPENAI_API_KEY="your-api-key-here"
 ```
 
 SpeakNow provides two main entry points for different use cases.
+If the script don't work, make sure the scripts path for Python is included in PATH Environment Variable.
+
 
 ### 1. Standard Application
 Launch the main TUI application to start a real-time session:

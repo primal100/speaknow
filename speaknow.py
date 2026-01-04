@@ -23,7 +23,9 @@ from datetime import datetime
 
 from speaknow_ai_realtime_text_to_speech.app_css import CSS
 from speaknow_ai_realtime_text_to_speech import version
-from speaknow_ai_realtime_text_to_speech.directories import APP_NAME, HOME, get_log_config_file, get_log_dir, get_recordings_dir, get_token_dir
+from speaknow_ai_realtime_text_to_speech.directories import (APP_NAME, HOME, get_log_config_file,
+                                                             get_default_log_config_file, get_log_dir,
+                                                             get_recordings_dir, get_token_dir)
 from speaknow_ai_realtime_text_to_speech.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
                                                          TextualLogMessage, TextualPaneLogHandler, ConfigModal)
 from speaknow_ai_realtime_text_to_speech.config import ConfigManager
@@ -83,9 +85,8 @@ REALTIME_CONVO_CSV = Path(TOKENS_DIR) / "realtime_conversation_tokens.csv"
 REALTIME_TOKENS_CSV = Path(TOKENS_DIR) / "realtime_transcribe_tokens.csv"
 
 if not LOG_CONFIG_FILE.exists():
-    PACKAGE_DIR = Path(__file__).resolve().parent
-    PACKAGE_LOG_CONFIG_DIR = PACKAGE_DIR / "logging.conf"
-    shutil.copy(PACKAGE_LOG_CONFIG_DIR, LOG_CONFIG_FILE)
+    PACKAGE_LOG_CONFIG_PATH = get_default_log_config_file()
+    shutil.copy(PACKAGE_LOG_CONFIG_PATH, LOG_CONFIG_FILE)
 
 update_log_config(LOG_CONFIG_FILE, BASE_LOG_DIR)
 # Load logging config (.ini)

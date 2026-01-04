@@ -1,11 +1,16 @@
 import os
 from pathlib import Path
+from importlib.resources import files
 
 
 APP_NAME = 'Speaknow'
 
 
 HOME = Path(os.environ.get('appdata', Path.home() / ".config")) / APP_NAME
+
+
+def get_default_log_config_file() -> Path:
+    return Path(str(files("speaknow_ai_realtime_text_to_speech") / "conf" / "logging.conf"))
 
 
 def get_config_file() -> Path:
