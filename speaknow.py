@@ -362,7 +362,7 @@ class RealtimeApp(App[None]):
 
                         if usage := getattr(event, "usage"):
                             log.debug("Type: %s", type(usage))
-                            await asyncio.to_thread(write_realtime_transcribe_tokens, self.user_config['model'], text, usage)
+                            await asyncio.to_thread(write_realtime_transcribe_tokens, self.user_config['transcription_model'], text, usage)
                         else:
                             log.warning("No token usage info in transcription response.")
                             continue
