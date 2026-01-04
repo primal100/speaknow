@@ -92,5 +92,5 @@ Semantic VAD  uses a semantic classifier to detect when the user has finished sp
 Logs, token usage and config file (can also be modifed in the TUI) will be stored here:
 
 * Windows: %APPDATA%\Speaknow
-
-* Linux: $HOME.config/Speanow
+* Windows when python is installed from Microsoft Store path will be something like: %LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.1<....>\LocalCache\Roaming\Speaknow
+* Linux: $HOME/.config/Speanow
