@@ -75,6 +75,13 @@ class OpenAIGPTRealtime(BaseAIService):
     session: Session | None
     last_audio_item_id: str | None
 
+    @classmethod
+    def set_default_config_options_on_change(cls) -> dict[str, Any]:
+        return {
+            'model': "gpt-realtime-mini",
+            'transcription_model': "gpt-4o-mini-transcribe",
+        }
+
     def __init__(self, user_config: dict[str, Any]):
         super().__init__(user_config)
         self.client = AsyncOpenAI()
@@ -160,7 +167,6 @@ class OpenAIGPTRealtime(BaseAIService):
 
                 acc_items: dict[str, Any] = {}
                 transcription_items: dict[str, Any] = {}
-                speech_start_times: dict[str, datetime] = {}
 
                 async for event in conn:
                     events_log.info("Event Type: %s. Item Id: %s", event.type, getattr(event, "item_id", ""))

@@ -26,6 +26,10 @@ class BaseAIService(ABC):
     realtime_costs: dict[str, float] = {}
     transcription_costs: dict[str, float] = {}
 
+    @classmethod
+    def set_default_config_options_on_change(cls) -> dict[str, Any]:
+        return {}
+
     def __init__(self, user_config: dict[str, Any]):
         self.user_config = user_config
         self.realtime_convo_csv = Path(TOKENS_DIR) / f"{self.prefix}_realtime_conversation_tokens.csv"
