@@ -8,7 +8,11 @@ from textual.widget import Widget
 from textual.widgets import Static, Input, Label, Select, Checkbox, Button
 from textual.app import ComposeResult
 from logging import Handler, LogRecord
+from .ai_services import AI_SERVICES_DEFAULT_MODEL, AI_SERVICES_SELECTION
 from typing_extensions import override
+
+
+default_service = "openai"
 
 
 class AmplitudeGraph(Widget):
@@ -87,6 +91,13 @@ class ConfigModal(ModalScreen[dict]):
 
         # Scrollable Middle Section
         with VerticalScroll(id="config-body"):
+            yield Label("AI Service")
+            yield Select(
+                AI_SERVICES_SELECTION,
+                value=cfg["ai_service"],
+                name="ai_service",
+            )
+
             yield Label("Model Name")
             yield Input(value=cfg["model"], name="model")
 

@@ -1,7 +1,10 @@
 import yaml
-from pathlib import Path
+from typing import Any
+from .ai_services import AI_SERVICES_DEFAULT_MODEL
 from .directories import get_config_file
 
+
+DEFAULT_AI_SERVICE = "openai"
 
 class ConfigManager:
     def __init__(self):
@@ -9,20 +12,21 @@ class ConfigManager:
 
         # Default values if file doesn't exist
         self.defaults = {
-            "model": "gpt-realtime-mini",
+            "ai_service": DEFAULT_AI_SERVICE,
+            "model": AI_SERVICES_DEFAULT_MODEL[DEFAULT_AI_SERVICE]["realtime"],
             "mode": "manual",
             "prompt": "Reply promptly. If a question is asked, answer it with just the answer.",
             "play_audio": True,
             "output_modalities": ["audio"],
             "transcription_enabled": True,
-            "transcription_model": "gpt-4o-mini-transcribe",
+            "transcription_model": AI_SERVICES_DEFAULT_MODEL[DEFAULT_AI_SERVICE]["transcription"],
             "language": "en",
             "immediate_initialisation": False,
             "save_silence_multiplier": 0,
             "save_speech_multiplier": 0
         }
 
-    def load(self) -> dict:
+    def load(self) -> dict[str, Any]:
         if not self.config_file.exists():
             self.save(self.defaults)
             return self.defaults
