@@ -8,7 +8,7 @@ from textual.widget import Widget
 from textual.widgets import Static, Input, Label, Select, Checkbox, Button
 from textual.app import ComposeResult
 from logging import Handler, LogRecord
-from .ai_services import AI_SERVICES_DEFAULT_MODEL, AI_SERVICES_SELECTION
+from .ai_services import ai_services, AI_SERVICES_SELECTION
 from typing_extensions import override
 
 
@@ -96,6 +96,7 @@ class ConfigModal(ModalScreen[dict]):
                 AI_SERVICES_SELECTION,
                 value=cfg["ai_service"],
                 name="ai_service",
+                id="ai-service-select"
             )
 
             yield Label("Model Name")
@@ -141,6 +142,37 @@ class ConfigModal(ModalScreen[dict]):
         with Horizontal(id="config-buttons"):
             yield Button("Save", variant="success", id="save_config")
             yield Button("Cancel", variant="error", id="cancel_config")
+
+    def get_field(self, fieldname: str) -> Widget:
+        return self.query_one(f"Input[name='{fieldname}'], Select[name='{fieldname}']")
+
+    @on(Select.Changed, "#ai-service-select")
+    def handle_service_change(self, event: Select.Changed) -> None:
+        new_service = event.value
+        ai_service_cls = ai_services[new_service]
+        changes = ai_service_cls.set_default_config_options_on_change()
+
+        disabled_list = changes.get("DISABLED", [])
+
+        # Query all interactive controls in the modal
+        for control in self.query("Input, Select, Checkbox"):
+            fieldname = control.name
+            if not fieldname:
+                continue
+
+            # 1. Update Disabled state
+            # This re-enables fields NOT in the list and disables those that ARE
+            control.disabled = (fieldname in disabled_list)
+
+            # 2. Update Value if specified
+            if fieldname in changes:
+                new_val = changes[fieldname]
+
+                # Checkbox specific logic: ensure it gets a boolean
+                if isinstance(control, Checkbox):
+                    control.value = bool(new_val)
+                else:
+                    control.value = str(new_val)
 
     @on(Button.Pressed)
     def handle_buttons(self, event: Button.Pressed) -> None:

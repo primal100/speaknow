@@ -1,7 +1,7 @@
 import asyncio
 import base64
-from datetime import datetime
 import logging
+from numpy import ndarray
 from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
 from openai.types.realtime.realtime_response_usage import RealtimeResponseUsage
 from openai.types.realtime.conversation_item_input_audio_transcription_completed_event import UsageTranscriptTextUsageTokens
@@ -11,7 +11,7 @@ from openai.types.realtime.session_update_event_param import Session  # https://
 from openai.resources.realtime.realtime import AsyncRealtimeConnection  # Another bug?
 from openai.types.realtime.realtime_audio_input_turn_detection_param import ServerVad, SemanticVad
 from typing import Any, cast
-from .base import BaseAIService, LogWriter, SessionDisplay
+from .base import BaseAIService, LogWriter
 
 
 log_writer = LogWriter("realtime_tokens")
@@ -75,6 +75,13 @@ class OpenAIGPTRealtime(BaseAIService):
     session: Session | None
     last_audio_item_id: str | None
 
+    @classmethod
+    def set_default_config_options_on_change(cls) -> dict[str, Any]:
+        return {
+            'model': "gpt-realtime-mini",
+            'transcription_model': "gpt-4o-mini-transcribe",
+        }
+
     def __init__(self, user_config: dict[str, Any]):
         super().__init__(user_config)
         self.client = AsyncOpenAI()
@@ -97,7 +104,7 @@ class OpenAIGPTRealtime(BaseAIService):
         assert self.connection is not None
         return self.connection
 
-    async def send_audio(self, data: bytes, sent_audio: bool) -> bool:
+    async def send_audio(self, data: ndarray, sent_audio: bool) -> bool:
         connection = await self._get_connection()
         if not sent_audio:
             if self.response_in_progress.is_set():
@@ -160,7 +167,6 @@ class OpenAIGPTRealtime(BaseAIService):
 
                 acc_items: dict[str, Any] = {}
                 transcription_items: dict[str, Any] = {}
-                speech_start_times: dict[str, datetime] = {}
 
                 async for event in conn:
                     events_log.info("Event Type: %s. Item Id: %s", event.type, getattr(event, "item_id", ""))
@@ -184,7 +190,7 @@ class OpenAIGPTRealtime(BaseAIService):
                             is_first = True
                         event_queue.put_nowait({"type": "audio_response", "item_id": event.item_id,
                                                 "is_first_in_response": is_first, "data": bytes_data})
-                        self.last_audio_item_id = event["item_id"]
+                        self.last_audio_item_id = event.item_id
                         continue
 
                     if event.type == "response.output_audio_transcript.delta" or event.type == "response.output_text.delta":

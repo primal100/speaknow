@@ -212,14 +212,16 @@ class RealtimeApp(App[None]):
                     # Clear and update the entire content because RichLog otherwise treats each delta as a new line
                     lower_middle_pane = self.query_one("#lower-middle-pane", RichLog)
                     lower_middle_pane.clear()
-                    lower_middle_pane.write(event["item_id"])
+                    if event_id := event.get("item_id", None):
+                        lower_middle_pane.write(event_id)
                     lower_middle_pane.write(event["text"])
 
                 elif event["type"] == "transcription_received":
                     # Clear and update the entire content because RichLog otherwise treats each delta as a new line
                     middle_pane = self.query_one("#middle-pane", RichLog)
                     middle_pane.clear()
-                    middle_pane.write(event["item_id"])
+                    if item_id := event.get("item_id", None):
+                        middle_pane.write(item_id)
                     middle_pane.write(event["text"])
                     continue
 
