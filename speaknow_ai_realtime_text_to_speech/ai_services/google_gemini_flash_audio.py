@@ -142,6 +142,8 @@ class GeminiLiveService(BaseAIService):
 
                             if message.server_content.turn_complete:
                                 log.debug("Gemini turn complete")
+                                if current_transcription:
+                                    log.info("[TRANSCRIPTION] REALTIME: %s", current_transcription)
                                 current_transcription = ""
                                 current_output_transcription = ""
                                 self.response_in_progress.clear()

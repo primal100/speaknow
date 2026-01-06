@@ -186,8 +186,8 @@ class OpenAIGPTRealtime(BaseAIService):
                         is_first = False
                         if event.item_id != self.last_audio_item_id:
                             log.info("First audio response received for %s", event.item_id)
-                            bytes_data = base64.b64decode(event.delta)
                             is_first = True
+                        bytes_data = base64.b64decode(event.delta)
                         event_queue.put_nowait({"type": "audio_response", "item_id": event.item_id,
                                                 "is_first_in_response": is_first, "data": bytes_data})
                         self.last_audio_item_id = event.item_id
