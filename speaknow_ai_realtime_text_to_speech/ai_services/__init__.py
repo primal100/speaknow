@@ -11,6 +11,9 @@ ai_services = {
 
 
 AI_SERVICES_SELECTION = [("OpenAI GPT", "openai"), ("Google Gemini", "google")]
+DEFAULT_AI_SERVICE = "openai"
+DEFAULT_AI_SERVICE_MODEL = "gpt-realtime-mini"
+DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
 
 
 def get_ai_service(user_config: dict[str, Any]) -> BaseAIService:

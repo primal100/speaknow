@@ -1,7 +1,6 @@
 from textual.app import App
 from textual import on
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -97,6 +96,7 @@ class ConfigModal(ModalScreen[dict]):
                 AI_SERVICES_SELECTION,
                 value=cfg["ai_service"],
                 name="ai_service",
+                id="ai-service-select"
             )
 
             yield Label("Model Name")
@@ -146,7 +146,7 @@ class ConfigModal(ModalScreen[dict]):
     def get_field(self, fieldname: str) -> Widget:
         return self.query_one(f"Input[name='{fieldname}'], Select[name='{fieldname}']")
 
-    @on(Select.Changed, selector="Select[name='ai_service']")
+    @on(Select.Changed, "#ai-service-select")
     def handle_service_change(self, event: Select.Changed) -> None:
         new_service = event.value
         ai_service_cls = ai_services[new_service]

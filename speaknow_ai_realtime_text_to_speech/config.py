@@ -1,10 +1,8 @@
 import yaml
 from typing import Any
-from .ai_services import AI_SERVICES_DEFAULT_MODEL
+from .ai_services import DEFAULT_AI_SERVICE, DEFAULT_AI_SERVICE_MODEL, DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL
 from .directories import get_config_file
 
-
-DEFAULT_AI_SERVICE = "openai"
 
 class ConfigManager:
     def __init__(self):
@@ -12,14 +10,15 @@ class ConfigManager:
 
         # Default values if file doesn't exist
         self.defaults = {
+
             "ai_service": DEFAULT_AI_SERVICE,
-            "model": AI_SERVICES_DEFAULT_MODEL[DEFAULT_AI_SERVICE]["realtime"],
+            "model": DEFAULT_AI_SERVICE_MODEL,
             "mode": "manual",
             "prompt": "Reply promptly. If a question is asked, answer it with just the answer.",
             "play_audio": True,
             "output_modalities": ["audio"],
             "transcription_enabled": True,
-            "transcription_model": AI_SERVICES_DEFAULT_MODEL[DEFAULT_AI_SERVICE]["transcription"],
+            "transcription_model": DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL,
             "language": "en",
             "immediate_initialisation": False,
             "save_silence_multiplier": 0,
