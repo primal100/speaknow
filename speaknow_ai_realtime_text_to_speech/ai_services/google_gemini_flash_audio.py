@@ -9,7 +9,7 @@ from typing import Any
 
 from google import genai
 from google.genai import types
-from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
+from gpt_token_tracker.pricing_gemini import PricingGemini
 from .base import BaseAIService
 
 log = logging.getLogger("realtime_app")
@@ -29,13 +29,20 @@ class GeminiLiveService(BaseAIService):
     session: google.genai.live.AsyncSession | None
     # Note: Pricing is based on 2026 rates for Gemini 2.5 Flash Native Audio
     realtime_costs = {
-        "text_in": 0.50,  # per 1M tokens
-        "audio_in": 3.00,  # per 1M tokens
-        "text_out": 2.00,  # per 1M tokens
-        "audio_out": 12.00  # per 1M tokens
+        "text_in": 0.10,
+        "image_in": 0.10,
+        "video_in": 0.10,
+        "audio_in": 0.30,
+        "cached_text_in": 0.01,
+        "cached_video_in": 0.01,
+        "cached_image_in": 0.01,
+        "cached_audio_in": 0.03,
+        "text_out": 0.40,
+        "audio_out": 0.40,
+        "thinking": 0.40
     }
     # Gemini uses specific usage metadata keys
-    realtime_pricing_cls = PricingRealtime
+    realtime_pricing_cls = PricingGemini
     transcription_pricing_cls = None
 
     @classmethod
@@ -53,9 +60,8 @@ class GeminiLiveService(BaseAIService):
         self.response_in_progress = asyncio.Event()
 
     def write_realtime_tokens(self, model: str, result: str, usage: google.genai.types.UsageMetadata) -> None:
-        log.info(usage)
-        """self.token_logger_realtime.record(model, result, usage)
-        self.csv_token_logger_realtime.record(model, result, usage)"""
+        self.token_logger_realtime.record(model, result, usage)
+        self.csv_token_logger_realtime.record(model, result, usage)
 
     def write_realtime_transcribe_tokens(self, model: str, result: str, usage: Any) -> None:
         pass
@@ -74,15 +80,17 @@ class GeminiLiveService(BaseAIService):
             pcm_data = data.tobytes()
 
         # Gemini expects raw PCM or base64 blobs
-        await self.session.send(
-            input=types.LiveClientRealtimeInput(
-                media_chunks=[types.Blob(data=pcm_data, mime_type=f"audio/pcm;rate={SAMPLE_RATE}")]
+        await self.session.send_realtime_input(
+            audio=types.Blob(
+                data=pcm_data,
+                mime_type=f"audio/pcm;rate={SAMPLE_RATE}",
             )
         )
         return True
 
     async def handle_realtime_connection(self, event_queue: asyncio.Queue[dict[str, Any]]) -> None:
         current_transcription: str = ""
+        last_output_transcription: str = ""
         current_output_transcription: str = ""
         model_id = self.user_config.get('model', 'gemini-2.5-flash-native-audio-preview-12-2025"')
         # Should be self.user_config.get('output_modalities') but anything other than just 'audio' is rejeceted at least as of gemini-2.5-flash-native-audio-preview-12-2025"
@@ -138,6 +146,7 @@ class GeminiLiveService(BaseAIService):
                             if message.server_content.generation_complete:
                                 log.debug("Gemini generation complete")
                                 current_transcription = ""
+                                last_output_transcription = current_output_transcription
                                 current_output_transcription = ""
 
                             if message.server_content.turn_complete:
@@ -145,7 +154,9 @@ class GeminiLiveService(BaseAIService):
                                 if current_transcription:
                                     log.info("[TRANSCRIPTION] REALTIME: %s", current_transcription)
                                 current_transcription = ""
-                                current_output_transcription = ""
+                                if current_output_transcription:
+                                    last_output_transcription = current_output_transcription
+                                    current_output_transcription = ""
                                 self.response_in_progress.clear()
 
                             if message.server_content.interrupted:
@@ -158,7 +169,7 @@ class GeminiLiveService(BaseAIService):
                             await asyncio.to_thread(
                                 self.write_realtime_tokens,
                                 model_id,
-                                "Gemini Audio Turn",
+                                current_output_transcription or last_output_transcription,
                                 usage
                             )
         except asyncio.CancelledError:
