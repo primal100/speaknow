@@ -28,7 +28,7 @@ class GeminiLiveService(BaseAIService):
     client: genai.Client
     session: google.genai.live.AsyncSession | None
     # Note: Pricing is based on 2026 rates for Gemini 2.5 Flash Native Audio
-    realtime_costs = {
+    realtime_costs = {"gemini-2.5-flash-native-audio-preview-12-2025": {
         "text_in": 0.10,
         "image_in": 0.10,
         "video_in": 0.10,
@@ -40,7 +40,7 @@ class GeminiLiveService(BaseAIService):
         "text_out": 0.40,
         "audio_out": 0.40,
         "thinking": 0.40
-    }
+    }}
     # Gemini uses specific usage metadata keys
     realtime_pricing_cls = PricingGemini
     transcription_pricing_cls = None
@@ -92,7 +92,7 @@ class GeminiLiveService(BaseAIService):
         current_transcription: str = ""
         last_output_transcription: str = ""
         current_output_transcription: str = ""
-        model_id = self.user_config.get('model', 'gemini-2.5-flash-native-audio-preview-12-2025"')
+        model_id = self.user_config.get('model', 'gemini-2.5-flash-native-audio-preview-12-2025')
         # Should be self.user_config.get('output_modalities') but anything other than just 'audio' is rejeceted at least as of gemini-2.5-flash-native-audio-preview-12-2025"
         output_modalities = ["audio"]
         # explicit_vad_signal gets rejected here as of gemini-2.5-flash-native-audio-preview-12-2025 "explicit_vad_signal is not supported in Gemini API"

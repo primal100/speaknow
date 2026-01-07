@@ -9,4 +9,4 @@ textual-dev
 textual_serve
 PyYAML
 typing_extensions
-gpt-token-tracker>=0.2.1
+gpt-token-tracker
