@@ -37,7 +37,7 @@ class SessionDisplay(Static):
 
     @override
     def render(self) -> str:
-        return f"Session ID: {self.session_id}" if self.session_id else "Connecting..."
+        return f"Session: {self.session_id}" if self.session_id else "Connecting..."
 
 
 class AudioStatusIndicator(Static):

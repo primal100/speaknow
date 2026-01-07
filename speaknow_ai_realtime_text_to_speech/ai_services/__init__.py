@@ -1,16 +1,18 @@
 from .base import BaseAIService
 from .openai_gpt_realtime import OpenAIGPTRealtime
 from .google_gemini_flash_audio import GeminiLiveService
+from .xai_grok_voice import XAIGrokVoice
 from typing import Any
 
 
 ai_services = {
     "openai": OpenAIGPTRealtime,
-    "google": GeminiLiveService
+    "google": GeminiLiveService,
+    "xai": XAIGrokVoice
 }
 
 
-AI_SERVICES_SELECTION = [("OpenAI GPT", "openai"), ("Google Gemini", "google")]
+AI_SERVICES_SELECTION = [("OpenAI GPT", "openai"), ("Google Gemini", "google"), ("xAI Grok Voice", "xai")]
 DEFAULT_AI_SERVICE = "openai"
 DEFAULT_AI_SERVICE_MODEL = "gpt-realtime-mini"
 DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"

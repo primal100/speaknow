@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import datetime
 import logging
 import os
 
@@ -69,6 +70,7 @@ class OpenAIGPTRealtime(BaseAIService):
     async def handle_realtime_connection(self, event_queue: asyncio.Queue[dict[str, Any]]) -> None:
         try:
             async with self.client.realtime.connect(model=self.user_config['model']) as conn:
+                connection_start_time = datetime.datetime.now()
                 self.connection = conn
                 self.connected.set()
 
@@ -123,14 +125,18 @@ class OpenAIGPTRealtime(BaseAIService):
                     events_log.info("Event Type: %s. Item Id: %s", event.type, getattr(event, "item_id", ""))
                     events_log.debug(event)
                     if event.type == "session.created":
+                        # Not sent by Grok
                         self.session = event.session
-                        assert event.session.id is not None
-                        event_queue.put_nowait({"type": "session_id", "session_id": event.session.id})
+                        assert self.session.id is not None
+                        event_queue.put_nowait({"type": "session_id", "session_id": self.session.id})
                         continue
 
                     if event.type == "session.updated":
                         event_queue.put_nowait({"type": "session_updated"})
                         self.session = event.session
+                        # Grok has no session ID
+                        event_queue.put_nowait({"type": "session_id",
+                                                "session_id": f'{getattr(self.session, "model", "")} {getattr(self.session, "id", "")}'})
                         continue
 
                     if event.type == "response.output_audio.delta":
@@ -250,6 +256,8 @@ class OpenAIGPTRealtime(BaseAIService):
 
                         continue
         finally:
+            connection_end_time = datetime.datetime.now()
+            await self.log_connection_time(connection_start_time, connection_end_time)
             log.debug('Clearing events')
             self.connected.clear()
             self.connection = None
