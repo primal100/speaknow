@@ -2,6 +2,7 @@
 
 SpeakNow is a high-performance, real-time AI voice interface built that runs on either OpenAI Realtime API, Google Gemini Flash Native Audio Live API or Grok Voice. It provides a seamless, low-latency speech-to-speech conversational experience directly in your terminal.
 
+In additional to the textual TUI, various parts of the code can be used in other applications as a library particularly the code in ```speaknow_ai_realtime_text_to_speech.py/ai_services``` path. Documentation for a stable API is planned in near future.
 This project is based on and inspired by the `push_to_talk_app.py` example from the [openai-python](https://github.com/openai/openai-python/blob/main/examples/realtime/push_to_talk_app.py) repository but with lots of features added and support for other AI services.
 
 ## Features
