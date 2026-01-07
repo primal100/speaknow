@@ -1,3 +1,4 @@
+import os
 import yaml
 from typing import Any
 from .ai_services import DEFAULT_AI_SERVICE, DEFAULT_AI_SERVICE_MODEL, DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL
@@ -13,9 +14,9 @@ class ConfigManager:
 
             "ai_service": DEFAULT_AI_SERVICE,
             "model": DEFAULT_AI_SERVICE_MODEL,
-            "base_url": "",
+            "base_url": os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1",
             "api_key_env": "OPENAI_API_KEY",
-            "mode": "manual",
+            "mode": "server",
             "prompt": "Reply promptly. If a question is asked, answer it with just the answer.",
             "play_audio": True,
             "output_modalities": ["audio"],

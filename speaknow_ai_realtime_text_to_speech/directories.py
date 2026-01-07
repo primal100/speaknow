@@ -34,8 +34,3 @@ def get_token_dir() -> Path:
     token_dir.mkdir(parents=True, exist_ok=True)
     return token_dir
 
-
-def get_recordings_dir() -> Path:
-    recordings_dir = HOME / 'recordings'
-    recordings_dir.mkdir(parents=True, exist_ok=True)
-    return recordings_dir
