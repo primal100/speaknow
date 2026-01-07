@@ -50,7 +50,7 @@ export OPENAI_API_KEY="your-api-key-here"
 ```
 
 SpeakNow provides two main entry points for different use cases.
-If the script doesn't work, make sure the scripts path for Python is included in PATH Environment Variable.
+If the script doesn't work, make sure the scripts path for Python is included in the PATH Environment Variable.
 
 
 ### 1. Standard Application
