@@ -13,6 +13,8 @@ class ConfigManager:
 
             "ai_service": DEFAULT_AI_SERVICE,
             "model": DEFAULT_AI_SERVICE_MODEL,
+            "base_url": "",
+            "api_key_env": "OPENAI_API_KEY",
             "mode": "manual",
             "prompt": "Reply promptly. If a question is asked, answer it with just the answer.",
             "play_audio": True,

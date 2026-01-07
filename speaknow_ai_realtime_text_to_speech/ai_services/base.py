@@ -36,10 +36,8 @@ class BaseAIService(ABC):
         self.user_config = user_config
         if self.user_config.get("save_token_data") and self.user_config["model"] in self.realtime_costs:
             self.realtime_convo_csv = Path(TOKENS_DIR) / f"{self.prefix}_realtime_conversation_tokens.csv"
-            self.realtime_tokens_csv = Path(TOKENS_DIR) / f"{self.prefix}_realtime_transcribe_tokens.csv"
             self.token_logger_realtime = TokenLogger(log_writer, self.realtime_pricing_cls(self.realtime_costs))
             self.csv_writer_realtime = CSVWriter(self.realtime_convo_csv)
-            self.csv_writer_realtime_transcribe = CSVWriter(self.realtime_tokens_csv)
             self.csv_token_logger_realtime = TokenLogger(self.csv_writer_realtime, self.realtime_pricing_cls(self.realtime_costs))
         else:
             self.realtime_convo_csv = None
@@ -48,6 +46,8 @@ class BaseAIService(ABC):
             self.csv_writer_realtime = None
             self.csv_token_logger_realtime = None
         if self.user_config.get("save_token_data") and self.transcription_pricing_cls and self.user_config['transcription_model'] in self.transcription_costs:
+            self.realtime_transcribe_tokens_csv = Path(TOKENS_DIR) / f"{self.prefix}_realtime_transcribe_tokens.csv"
+            self.csv_writer_realtime_transcribe = CSVWriter(self.realtime_transcribe_tokens_csv)
             self.token_logger_realtime_transcription = TokenLogger(log_writer, self.transcription_pricing_cls(self.transcription_costs))
             self.csv_token_logger_realtime_transcription = TokenLogger(self.csv_writer_realtime_transcribe, self.transcription_pricing_cls(self.transcription_costs))
         else:
