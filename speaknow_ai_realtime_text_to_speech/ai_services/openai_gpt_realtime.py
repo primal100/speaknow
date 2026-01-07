@@ -5,8 +5,6 @@ import os
 
 from numpy import ndarray
 from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
-from openai.types.realtime.realtime_response_usage import RealtimeResponseUsage
-from openai.types.realtime.conversation_item_input_audio_transcription_completed_event import UsageTranscriptTextUsageTokens
 
 from openai import AsyncOpenAI
 from openai.types.realtime.session_update_event_param import Session  # https://github.com/openai/openai-python/pull/2803
@@ -24,38 +22,6 @@ events_log = logging.getLogger("events")
 class OpenAIGPTRealtime(BaseAIService):
     prefix = "openai"
     client: AsyncOpenAI
-    realtime_costs: dict[str, dict[str, float]] = {
-        "gpt-realtime": {
-            "text_in": 4.00,
-            "cached_text_in": 0.40,
-            "text_out": 16.00,
-            "audio_in": 32.00,
-            "audio_out": 64.0,
-            "image_in": 5.00,
-            "cached_image_in": 0.50,
-            "cached_audio_in": 0.40,
-        },
-        "gpt-realtime-mini": {
-            "text_in": 0.60,
-            "cached_text_in": 0.06,
-            "text_out": 2.40,
-            "audio_in": 10.00,
-            "audio_out": 20.00,
-            "image_in": 0.80,
-            "cached_image_in": 0.08,
-            "cached_audio_in": 0.30,
-        }
-    }
-    transcription_costs: dict[str, dict[str, float]] = {
-        "gpt-4o-transcribe": {
-            "audio_in": 2.50,
-            "text_out": 10.00
-        },
-        "gpt-4o-mini-transcribe": {
-            "audio_in": 1.25,
-            "text_out": 5.00
-        }
-    }
     realtime_pricing_cls = PricingRealtime
     transcription_pricing_cls = PricingAudioTranscription
     connection: AsyncRealtimeConnection | None
