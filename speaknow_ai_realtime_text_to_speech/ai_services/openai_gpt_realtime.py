@@ -22,17 +22,7 @@ events_log = logging.getLogger("events")
 class OpenAIGPTRealtime(BaseAIService):
     prefix = "openai"
     client: AsyncOpenAI
-    realtime_costs: dict[str, Any] = {
-            "text_in": 0.60,
-            "cached_text_in": 0.06,
-            "text_out": 2.40,
-            "audio_in": 10.00,
-            "audio_out": 20.00,
-            "image_in": 0.80,
-            "cached_image_in": 0.08,
-            "cached_audio_in": 0.30,
-    }
-    realtime_costs_multi_model: dict[str, dict[str, float]] = {
+    realtime_costs: dict[str, dict[str, float]] = {
         "gpt-realtime": {
             "text_in": 4.00,
             "cached_text_in": 0.40,
@@ -54,11 +44,7 @@ class OpenAIGPTRealtime(BaseAIService):
             "cached_audio_in": 0.30,
         }
     }
-    transcription_costs: dict[str, float] = {
-            "audio_in": 1.25,
-            "text_out": 5.00
-    }
-    transcription_costs_multi_model: dict[str, dict[str, float]] = {
+    transcription_costs: dict[str, dict[str, float]] = {
         "gpt-4o-transcribe": {
             "audio_in": 2.50,
             "text_out": 10.00
@@ -268,7 +254,7 @@ class OpenAIGPTRealtime(BaseAIService):
                         if output := event.response.output:
                             item = output[0]
                             if content := getattr(item, "content", None):
-                                result = getattr(content[0], "text", None)
+                                result = getattr(content[0], "text", getattr(content[0], "transcript", None))
                         if status_details:
                             log.info("%s Response is done, status: %s, type: %s, reason: %s, error: %s, result: %s",
                                      event.response.id, status, status_details.type,
