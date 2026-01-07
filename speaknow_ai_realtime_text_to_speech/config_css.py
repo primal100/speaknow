@@ -72,6 +72,25 @@ Checkbox {
     margin: 0 2;
 }
 
+/* Container for the three horizontal fields */
+#model-settings-row {
+    height: auto;
+    width: 100%;
+    margin-bottom: 1;
+}
+
+/* Ensure each vertical column takes up 1/3 of the width */
+#model-settings-row Vertical {
+    width: 1fr;
+    height: auto;
+    padding-right: 1; /* Space between columns */
+}
+
+/* Optional: Adjust Input height inside the row if they look cramped */
+#model-settings-row Input {
+    width: 100%;
+}
+
 #save_config { background: #31ad62; color: white; }
 #cancel_config { background: #c94a5b; color: white; }
 """

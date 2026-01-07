@@ -1,6 +1,8 @@
 import asyncio
 import base64
 import logging
+import os
+
 from numpy import ndarray
 from gpt_token_tracker.pricing import PricingRealtime, PricingAudioTranscription
 from openai.types.realtime.realtime_response_usage import RealtimeResponseUsage
@@ -65,12 +67,17 @@ class OpenAIGPTRealtime(BaseAIService):
     def set_default_config_options_on_change(cls) -> dict[str, Any]:
         return {
             'model': "gpt-realtime-mini",
+            'base_url': os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1",
+            'api_key_env': "OPENAI_API_KEY",
             'transcription_model': "gpt-4o-mini-transcribe",
         }
 
     def __init__(self, user_config: dict[str, Any]):
         super().__init__(user_config)
-        self.client = AsyncOpenAI()
+        self.client = AsyncOpenAI(
+            api_key=os.environ[self.user_config["api_key_env"]],
+            base_url=self.user_config["base_url"] or None
+        )
         self.connection = None
         self.session = None
         self.connected = asyncio.Event()
@@ -249,10 +256,10 @@ class OpenAIGPTRealtime(BaseAIService):
                             item = output[0]
                             if content := getattr(item, "content", None):
                                 result = getattr(content[0], "text", None) or getattr(content[0], "transcript", None)
-                        if status_details:
+                        if status_details and hasattr(status_details, "type"):  # Grok has status_details=='unimplemented')
                             log.info("%s Response is done, status: %s, type: %s, reason: %s, error: %s, result: %s",
-                                     event.response.id, status, status_details.type,
-                                     status_details.reason, status_details.error, result)
+                                     event.response.id, status, getattr(status_details, "type", ""),
+                                     getattr(status_details, "reason", ""), getattr(status_details, "error", ""), result)
                         else:
                             log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
                         if usage := getattr(event.response, "usage"):

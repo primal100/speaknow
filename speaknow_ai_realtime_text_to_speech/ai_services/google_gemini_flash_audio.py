@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 import google.genai.live
 
@@ -49,12 +50,16 @@ class GeminiLiveService(BaseAIService):
     def set_default_config_options_on_change(cls) -> dict[str, Any]:
         return {
             'model': "gemini-2.5-flash-native-audio-preview-12-2025",
+            'api_key_env': "GEMINI_API_KEY",
+            'base_url': os.environ.get("GEMINI_NEXT_GEN_API_BASE_URL") or 'https://generativelanguage.googleapis.com/',
             'DISABLED': ('mode', 'transcription_model', 'audio', 'language')
         }
 
     def __init__(self, user_config: dict[str, Any]):
         super().__init__(user_config)
-        self.client = genai.Client()
+        self.client = genai.Client(
+            api_key=os.environ[self.user_config["api_key_env"]],
+            )
         self.session = None
         self.connected = asyncio.Event()
         self.response_in_progress = asyncio.Event()

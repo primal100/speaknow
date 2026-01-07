@@ -83,6 +83,19 @@ class TextualPaneLogHandler(Handler):
 class ConfigModal(ModalScreen[dict]):
     """A modal screen to edit application settings."""
 
+    def __init__(self):
+        # Flag to prevent default values from overwriting existing config during startup
+        self._is_loading = True
+        super().__init__()
+
+    def on_mount(self) -> None:
+        # After mounting and setting initial values, we clear the flag
+        # We use call_after_refresh to ensure the initial 'Changed' events have fired
+        self.call_after_refresh(self._finish_loading)
+
+    def _finish_loading(self):
+        self._is_loading = False
+
     def compose(self) -> ComposeResult:
         cfg = self.app.user_config
 
@@ -99,8 +112,18 @@ class ConfigModal(ModalScreen[dict]):
                 id="ai-service-select"
             )
 
-            yield Label("Model Name")
-            yield Input(value=cfg["model"], name="model")
+            with Horizontal(id="model-settings-row"):
+                with Vertical():
+                    yield Label("Model Name")
+                    yield Input(value=cfg["model"], name="model")
+
+                with Vertical():
+                    yield Label("Base Url")
+                    yield Input(value=cfg["base_url"], name="base_url", placeholder="Default URL")
+
+                with Vertical():
+                    yield Label("API Key Environment Variable")
+                    yield Input(value=cfg["api_key_env"], name="api_key_env")
 
             yield Label("System Prompt")
             yield Input(value=cfg["prompt"], name="prompt")
@@ -165,7 +188,7 @@ class ConfigModal(ModalScreen[dict]):
             control.disabled = (fieldname in disabled_list)
 
             # 2. Update Value if specified
-            if fieldname in changes:
+            if not self._is_loading and fieldname in changes:
                 new_val = changes[fieldname]
 
                 # Checkbox specific logic: ensure it gets a boolean
