@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from datetime import datetime
 from numpy import ndarray
+from gpt_token_tracker.models import Timed
 from gpt_token_tracker.writers.types import Writer
 from gpt_token_tracker.writers.log_writer import LogWriter
 from gpt_token_tracker.token_logger import TokenLogger
@@ -27,6 +28,8 @@ class BaseAIService(ABC):
     client: Any
     realtime_pricing_cls: Type
     transcription_pricing_cls: Type
+    log_token_usage: bool = True
+    log_per_interval_pricing: bool = False
 
     @classmethod
     def set_default_config_options_on_change(cls) -> dict[str, Any]:
@@ -62,12 +65,6 @@ class BaseAIService(ABC):
         if logger:
             await asyncio.to_thread(logger.close)
 
-    async def log_connection_time(self, start_time: datetime, end_time: datetime):
-        # For grok to be implemented in gpt_token_tracker
-        #connection_time = end_time - start_time
-        pass
-
-
     async def cleanup_resources(self):
         await asyncio.gather(
             self._close_logger_if_present(self.token_logger_realtime),
@@ -75,6 +72,13 @@ class BaseAIService(ABC):
             self._close_logger_if_present(self.token_logger_realtime_transcription),
             self._close_logger_if_present(self.csv_writer_realtime_transcribe),
         )
+
+    async def write_connection_time(self, model: str, start_time: datetime):
+        if self.log_per_interval_pricing and self.token_logger_realtime and self.csv_token_logger_realtime:
+            end_time = datetime.now()
+            timed = Timed(start_time=start_time, end_time=end_time)
+            self.token_logger_realtime.record_timed(model, timed)
+            await asyncio.to_thread(self.csv_token_logger_realtime.record_timed, model, timed)
 
     async def write_realtime_tokens(self, model: str, result: str, usage: Any) -> None:
         self.token_logger_realtime.record(model, result, usage)
@@ -87,13 +91,13 @@ class BaseAIService(ABC):
     async def write_realtime_tokens_wrapper(self, model: str, result: str, usage: Any) -> None:
         if not self.user_config['save_result']:
             result = ""
-        if self.token_logger_realtime and self.csv_token_logger_realtime:
+        if self.log_token_usage and self.token_logger_realtime and self.csv_token_logger_realtime:
             await self.write_realtime_tokens(model, result, usage)
 
     async def write_realtime_transcribe_tokens_wrapper(self, model: str, result: str, usage: Any) -> None:
         if not self.user_config['save_result']:
             result = ""
-        if self.token_logger_realtime_transcription and self.csv_token_logger_realtime_transcription:
+        if self.log_token_usage and self.token_logger_realtime_transcription and self.csv_token_logger_realtime_transcription:
             await self.write_realtime_transcribe_tokens(model, result, usage)
 
     @abstractmethod

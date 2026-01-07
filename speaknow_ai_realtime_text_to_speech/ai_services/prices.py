@@ -31,6 +31,9 @@ realtime_costs = {
         "text_out": 0.40,
         "audio_out": 0.40,
         "thinking": 0.40
+    },
+    "grok-4": {
+        "per_interval": 0.05,
     }
 }
 

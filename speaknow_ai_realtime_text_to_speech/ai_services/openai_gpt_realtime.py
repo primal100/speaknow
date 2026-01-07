@@ -200,10 +200,6 @@ class OpenAIGPTRealtime(BaseAIService):
                             await self.write_realtime_transcribe_tokens_wrapper(
                                 self.user_config['transcription_model'],
                                 text, usage)
-                        else:
-                            log.warning("No token usage info in transcription response.")
-                            continue
-
                         continue
 
                     if event.type == "response.created":
@@ -234,7 +230,7 @@ class OpenAIGPTRealtime(BaseAIService):
                                      getattr(status_details, "reason", ""), getattr(status_details, "error", ""), result)
                         else:
                             log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
-                        if usage := getattr(event.response, "usage"):
+                        if usage := getattr(event.response, "usage") and getattr(usage, "total_tokens", None) is not None:
                             await self.write_realtime_tokens_wrapper(
                                                     self.user_config['model'],
                                                     result,
@@ -256,8 +252,7 @@ class OpenAIGPTRealtime(BaseAIService):
 
                         continue
         finally:
-            connection_end_time = datetime.datetime.now()
-            await self.log_connection_time(connection_start_time, connection_end_time)
+            await self.write_connection_time(self.user_config['model'], connection_start_time)
             log.debug('Clearing events')
             self.connected.clear()
             self.connection = None
