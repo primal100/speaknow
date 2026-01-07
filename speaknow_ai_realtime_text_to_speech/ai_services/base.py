@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import asyncio
 from numpy import ndarray
+from gpt_token_tracker.writers.types import Writer
 from gpt_token_tracker.writers.log_writer import LogWriter
 from gpt_token_tracker.token_logger import TokenLogger
 from gpt_token_tracker.writers.csv_writer import CSVWriter
@@ -56,25 +57,26 @@ class BaseAIService(ABC):
             self.csv_writer_realtime_transcribe = None
             self.csv_token_logger_realtime_transcription = None
 
+    @staticmethod
+    async def _close_logger_if_present(logger: Writer | None):
+        if logger:
+            await asyncio.to_thread(logger.close)
+
     async def cleanup_resources(self):
-        if self.token_logger_realtime:
-            await asyncio.gather(
-                asyncio.to_thread(self.token_logger_realtime.close),
-                asyncio.to_thread(self.csv_token_logger_realtime.close),
-            )
-        if self.token_logger_realtime_transcription:
-            await asyncio.gather(
-                asyncio.to_thread(self.token_logger_realtime_transcription.close),
-                asyncio.to_thread(self.csv_writer_realtime_transcribe.close)
+        await asyncio.gather(
+            self._close_logger_if_present(self.token_logger_realtime),
+            self._close_logger_if_present(self.csv_token_logger_realtime),
+            self._close_logger_if_present(self.token_logger_realtime_transcription),
+            self._close_logger_if_present(self.csv_writer_realtime_transcribe),
         )
 
     async def write_realtime_tokens(self, model: str, result: str, usage: Any) -> None:
         self.token_logger_realtime.record(model, result, usage)
-        await asyncio.to_thread(self.csv_token_logger_realtime.record(model, result, usage))
+        await asyncio.to_thread(self.csv_token_logger_realtime.record, model, result, usage)
 
     async def write_realtime_transcribe_tokens(self, model: str, result: str, usage: Any) -> None:
         self.token_logger_realtime_transcription.record(model, result, usage)
-        await asyncio.to_thread(self.csv_token_logger_realtime_transcription.record(model, result, usage))
+        await asyncio.to_thread(self.csv_token_logger_realtime_transcription.record, model, result, usage)
 
     async def write_realtime_tokens_wrapper(self, model: str, result: str, usage: Any) -> None:
         if not self.user_config['save_result']:
