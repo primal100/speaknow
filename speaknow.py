@@ -24,11 +24,11 @@ from speaknow_ai_realtime_text_to_speech.app_css import CSS
 from speaknow_ai_realtime_text_to_speech import version
 from speaknow_ai_realtime_text_to_speech.directories import (APP_NAME, HOME, get_log_config_file,
                                                              get_default_log_config_file, get_log_dir,
-                                                             get_recordings_dir, get_token_dir)
+                                                             get_token_dir)
 from speaknow_ai_realtime_text_to_speech.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
                                                          TextualLogMessage, TextualPaneLogHandler, ConfigModal)
 from speaknow_ai_realtime_text_to_speech.config import ConfigManager
-from speaknow_ai_realtime_text_to_speech.utils import update_log_config, save_wav_chunk
+from speaknow_ai_realtime_text_to_speech.utils import update_log_config
 
 from textual.app import App, ComposeResult
 from textual.logging import TextualHandler
@@ -50,7 +50,6 @@ warnings.filterwarnings(
 
 LOG_CONFIG_FILE = get_log_config_file()
 BASE_LOG_DIR = get_log_dir()
-AUDIO_DIR = get_recordings_dir()
 TOKENS_DIR = get_token_dir()
 
 if not LOG_CONFIG_FILE.exists():
