@@ -77,14 +77,6 @@ class OpenAIGPTRealtime(BaseAIService):
         self.response_in_progress = asyncio.Event()
         self.last_audio_item_id = None
 
-    def write_realtime_tokens(self, model: str, result: str, usage: RealtimeResponseUsage) -> None:
-        self.token_logger_realtime.record(model, result, usage)
-        self.csv_token_logger_realtime.record(model, result, usage)
-
-    def write_realtime_transcribe_tokens(self, model: str, result: str, usage: UsageTranscriptTextUsageTokens) -> None:
-        self.token_logger_realtime_transcription.record(model, result, usage)
-        self.csv_token_logger_realtime_transcription.record(model, result, usage)
-
     async def _get_connection(self) -> AsyncRealtimeConnection:
         await self.connected.wait()
         assert self.connection is not None
@@ -226,7 +218,9 @@ class OpenAIGPTRealtime(BaseAIService):
 
                         if usage := getattr(event, "usage"):
                             log.debug("Type: %s", type(usage))
-                            await asyncio.to_thread(self.write_realtime_transcribe_tokens, self.user_config['transcription_model'], text, usage)
+                            await self.write_realtime_transcribe_tokens_wrapper(
+                                self.user_config['transcription_model'],
+                                text, usage)
                         else:
                             log.warning("No token usage info in transcription response.")
                             continue
@@ -254,7 +248,7 @@ class OpenAIGPTRealtime(BaseAIService):
                         if output := event.response.output:
                             item = output[0]
                             if content := getattr(item, "content", None):
-                                result = getattr(content[0], "text", getattr(content[0], "transcript", None))
+                                result = getattr(content[0], "text", None) or getattr(content[0], "transcript", None)
                         if status_details:
                             log.info("%s Response is done, status: %s, type: %s, reason: %s, error: %s, result: %s",
                                      event.response.id, status, status_details.type,
@@ -262,7 +256,7 @@ class OpenAIGPTRealtime(BaseAIService):
                         else:
                             log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
                         if usage := getattr(event.response, "usage"):
-                            await asyncio.to_thread(self.write_realtime_tokens,
+                            await self.write_realtime_tokens_wrapper(
                                                     self.user_config['model'],
                                                     result,
                                                     usage

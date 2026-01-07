@@ -53,13 +53,6 @@ BASE_LOG_DIR = get_log_dir()
 AUDIO_DIR = get_recordings_dir()
 TOKENS_DIR = get_token_dir()
 
-GOOGLE_REALTIME_COSTS = {
-    "text_in": 0.50,
-    "text_out": 2.00,
-    "audio_in": 3.00,
-    "audio_out": 12.00,
-}
-
 if not LOG_CONFIG_FILE.exists():
     PACKAGE_LOG_CONFIG_PATH = get_default_log_config_file()
     shutil.copy(PACKAGE_LOG_CONFIG_PATH, LOG_CONFIG_FILE)
