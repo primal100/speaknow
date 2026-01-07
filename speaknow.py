@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 from typing_extensions import override
 from textual import events
+
 try:
     import sounddevice as sd
 except OSError:
@@ -37,7 +38,6 @@ from textual.containers import Container, Horizontal
 
 from speaknow_ai_realtime_text_to_speech.ai_services import get_ai_service, BaseAIService
 
-
 # Ignore pydub warning in python 3.14
 # site-packages\pydub\utils.py:300: SyntaxWarning: "\(" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\("? A raw string is also an option.
 import warnings
@@ -48,20 +48,17 @@ warnings.filterwarnings(
     module=r"pydub\..*",
 )
 
-
 LOG_CONFIG_FILE = get_log_config_file()
 BASE_LOG_DIR = get_log_dir()
 AUDIO_DIR = get_recordings_dir()
 TOKENS_DIR = get_token_dir()
 
-
 GOOGLE_REALTIME_COSTS = {
-        "text_in": 0.50,
-        "text_out": 2.00,
-        "audio_in": 3.00,
-        "audio_out": 12.00,
-    }
-
+    "text_in": 0.50,
+    "text_out": 2.00,
+    "audio_in": 3.00,
+    "audio_out": 12.00,
+}
 
 if not LOG_CONFIG_FILE.exists():
     PACKAGE_LOG_CONFIG_PATH = get_default_log_config_file()
@@ -71,7 +68,6 @@ update_log_config(LOG_CONFIG_FILE, BASE_LOG_DIR)
 # Load logging config (.ini)
 logging.config.fileConfig(LOG_CONFIG_FILE, disable_existing_loggers=False)
 log = logging.getLogger("realtime_app")
-
 
 log.info('Using application directory: %s', HOME)
 
@@ -144,7 +140,7 @@ class RealtimeApp(App[None]):
         await self.restart_workers()
 
     async def restart_workers(self):
-        
+
         if self.send_mic_audio_worker and not self.send_mic_audio_worker.is_finished:
             log.debug("Cancelling mic audio worker")
             self.send_mic_audio_worker.cancel()
@@ -182,7 +178,7 @@ class RealtimeApp(App[None]):
         self.connection_cancelled.clear()
         self.ai_service = get_ai_service(self.user_config)
         try:
-          await self.ai_service.handle_realtime_connection(self.event_queue)
+            await self.ai_service.handle_realtime_connection(self.event_queue)
         finally:
             log.debug('Clearing events')
             self.session_updated.clear()
@@ -246,7 +242,6 @@ class RealtimeApp(App[None]):
 
     async def send_mic_audio(self) -> None:
         log.info("Starting mic audio task")
-        recordings_dir = get_recordings_dir()
         try:
             await asyncio.wait_for(self.session_updated.wait(), timeout=10)
         except asyncio.TimeoutError:
@@ -272,8 +267,6 @@ class RealtimeApp(App[None]):
 
             status_indicator = self.query_one(AudioStatusIndicator)
 
-            wav_stream = b''
-
             try:
 
                 while True:
@@ -294,35 +287,11 @@ class RealtimeApp(App[None]):
 
                     amp_widget.amplitude = peak
 
-                    binary_data = data.tobytes()
-
-                    wav_stream += binary_data
-
-                    if not self.speech_ongoing.is_set():
-                        if self.speech_done.is_set():
-                            log.info("Saving speech done chunk")
-                            tg.create_task(save_wav_chunk(wav_stream, "speech_done", CHANNELS, SAMPLE_RATE, recordings_dir))
-                            wav_stream = b''
-                            self.speech_done.clear()
-                        elif self.user_config["save_silence_multiplier"] and len(wav_stream) > (
-                                read_size * self.user_config["save_silence_multiplier"]):
-                            log.debug("Saving silence chunk")
-                            tg.create_task(save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, recordings_dir))
-                            wav_stream = b''
-                    elif self.user_config["save_speech_multiplier"] and len(wav_stream) > (
-                            read_size * self.user_config["save_speech_multiplier"]):
-                        log.debug("Saving speech chunk")
-                        tg.create_task(save_wav_chunk(wav_stream, "speech", CHANNELS, SAMPLE_RATE, recordings_dir))
-                        wav_stream = b''
-
                     await asyncio.sleep(0)
             except KeyboardInterrupt:
                 pass
             finally:
-                log.debug("Stopping mic stream in finally...")
-                if wav_stream:
-                    log.debug("Saving final chunk")
-                    await save_wav_chunk(wav_stream, "periodic", CHANNELS, SAMPLE_RATE, recordings_dir)
+                log.debug("Stopping mic stream...")
                 stream.stop()
                 stream.close()
                 log.debug(tg._tasks)
@@ -415,6 +384,7 @@ class RealtimeApp(App[None]):
 def run():
     app = RealtimeApp()
     app.run()
+
 
 if __name__ == "__main__":
     run()

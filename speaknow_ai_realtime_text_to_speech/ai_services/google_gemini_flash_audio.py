@@ -59,13 +59,6 @@ class GeminiLiveService(BaseAIService):
         self.connected = asyncio.Event()
         self.response_in_progress = asyncio.Event()
 
-    def write_realtime_tokens(self, model: str, result: str, usage: google.genai.types.UsageMetadata) -> None:
-        self.token_logger_realtime.record(model, result, usage)
-        self.csv_token_logger_realtime.record(model, result, usage)
-
-    def write_realtime_transcribe_tokens(self, model: str, result: str, usage: Any) -> None:
-        pass
-
     async def send_audio(self, data: np.ndarray, sent_audio: bool) -> bool:
         if not self.session:
             return False
@@ -116,6 +109,7 @@ class GeminiLiveService(BaseAIService):
                 self.connected.set()
                 log.info("Gemini Live Session Started")
                 event_queue.put_nowait({"type": "session_updated"})
+                event_queue.put_nowait({"type": "session_id", "session_id": "Connected to Gemini"})
                 while True:
                     async for message in session.receive():
                         events_log.debug(message)
@@ -166,8 +160,7 @@ class GeminiLiveService(BaseAIService):
                         # 2. Handle Usage Metadata (Tokens)
                         if message.usage_metadata:
                             usage = message.usage_metadata
-                            await asyncio.to_thread(
-                                self.write_realtime_tokens,
+                            await self.write_realtime_tokens_wrapper(
                                 model_id,
                                 current_output_transcription or last_output_transcription,
                                 usage

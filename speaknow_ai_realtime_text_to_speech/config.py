@@ -21,8 +21,8 @@ class ConfigManager:
             "transcription_model": DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL,
             "language": "en",
             "immediate_initialisation": False,
-            "save_silence_multiplier": 0,
-            "save_speech_multiplier": 0
+            "save_token_data": True,
+            "save_result": False
         }
 
     def load(self) -> dict[str, Any]:

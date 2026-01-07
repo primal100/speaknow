@@ -129,14 +129,14 @@ class ConfigModal(ModalScreen[dict]):
             yield Checkbox("Immediate Initialization", value=cfg["immediate_initialisation"],
                            name="immediate_initialisation")
 
-            yield Label("Save Audio Files (value 0 or empty for no storage)")
+            yield Label("Save Token Usage Data")
             with Horizontal(classes="input-row"):
                 with Vertical():
-                    yield Label("Speech bytes multiplier")
-                    yield Input(value=str(cfg["save_speech_multiplier"]), name="save_speech_multiplier", type="integer")
+                    yield Label("Save tokens")
+                    yield Checkbox("Save Token Data", value=cfg["save_token_data"], name="save_token_data")
                 with Vertical():
-                    yield Label("Silence bytes multipler")
-                    yield Input(value=str(cfg["save_silence_multiplier"]), name="save_silence_multiplier", type="integer")
+                    yield Label("Save chat output result in tokens file")
+                    yield Checkbox("Save Result", value=cfg["save_result"], name="save_result")
 
         # Sticky Footer
         with Horizontal(id="config-buttons"):
@@ -196,7 +196,6 @@ class ConfigModal(ModalScreen[dict]):
             if not selected_modalities:
                 selected_modalities = ["text"]
             new_settings["output_modalities"] = selected_modalities
-            print(new_settings)
             self.dismiss(new_settings)
         else:
             self.dismiss()

@@ -48,11 +48,11 @@ class OpenAIGPTRealtime(BaseAIService):
         "gpt-4o-transcribe": {
             "audio_in": 2.50,
             "text_out": 10.00
-    },
+        },
         "gpt-4o-mini-transcribe": {
             "audio_in": 1.25,
             "text_out": 5.00
-    }
+        }
     }
     realtime_pricing_cls = PricingRealtime
     transcription_pricing_cls = PricingAudioTranscription
