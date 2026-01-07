@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import asyncio
+from datetime import datetime
 from numpy import ndarray
 from gpt_token_tracker.writers.types import Writer
 from gpt_token_tracker.writers.log_writer import LogWriter
@@ -60,6 +61,12 @@ class BaseAIService(ABC):
     async def _close_logger_if_present(logger: Writer | None):
         if logger:
             await asyncio.to_thread(logger.close)
+
+    async def log_connection_time(self, start_time: datetime, end_time: datetime):
+        # For grok to be implemented in gpt_token_tracker
+        #connection_time = end_time - start_time
+        pass
+
 
     async def cleanup_resources(self):
         await asyncio.gather(

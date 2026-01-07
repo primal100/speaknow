@@ -114,7 +114,7 @@ class GeminiLiveService(BaseAIService):
                 self.connected.set()
                 log.info("Gemini Live Session Started")
                 event_queue.put_nowait({"type": "session_updated"})
-                event_queue.put_nowait({"type": "session_id", "session_id": "Connected to Gemini"})
+                event_queue.put_nowait({"type": "session_id", "session_id": f"{model_id}"})
                 while True:
                     async for message in session.receive():
                         events_log.debug(message)
