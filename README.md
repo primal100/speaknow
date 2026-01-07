@@ -2,7 +2,7 @@
 
 SpeakNow is a high-performance, real-time AI voice interface built that runs on either OpenAI Realtime API, Google Gemini Flash Native Audio Live API or Grok Voice. It provides a seamless, low-latency speech-to-speech conversational experience directly in your terminal.
 
-This project is based on and inspired by the `push_to_talk_app.py` example from the [openai-python](https://github.com/openai/openai-python/blob/main/examples/realtime/push_to_talk_app.py) repository but with lots of features added.
+This project is based on and inspired by the `push_to_talk_app.py` example from the [openai-python](https://github.com/openai/openai-python/blob/main/examples/realtime/push_to_talk_app.py) repository but with lots of features added and support for other AI services.
 
 ## Features
 
@@ -39,7 +39,8 @@ sudo apt install portaudio19-dev ffmpeg
 ## Usage
 
 ### Configuration
-Before running, ensure your OPENAI_API_KEY is set in your environment variables. 
+Before running, ensure your OPENAI_API_KEY is set in your environment variables as minimum. 
+GEMINI_API_KEY and XAI_API_KEY can also be set if those services are needed.
 
 In Windows open the Edit Environmnent Variables GUI and add it there.
 
@@ -49,7 +50,7 @@ export OPENAI_API_KEY="your-api-key-here"
 ```
 
 SpeakNow provides two main entry points for different use cases.
-If the script don't work, make sure the scripts path for Python is included in PATH Environment Variable.
+If the script doesn't work, make sure the scripts path for Python is included in the PATH Environment Variable.
 
 
 ### 1. Standard Application
@@ -86,6 +87,7 @@ The mode can be changed in configuration.
 Manual mode is triggered by hitting "Start," speaking and then hitting "Stop." to send the audio.
 Server VAD and uses periods of silence to automatically chunk the audio.
 Semantic VAD  uses a semantic classifier to detect when the user has finished speaking, based on the words they have uttered.
+This setting will be ignored in Gemini which uses it's default VAD mechanism only.
 
 ### Application Data
 
@@ -93,4 +95,4 @@ Logs, token usage and config file (can also be modifed in the TUI) will be store
 
 * Windows: %APPDATA%\Speaknow
 * Windows when python is installed from Microsoft Store path will be something like: %LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.1<....>\LocalCache\Roaming\Speaknow
-* Linux: $HOME/.config/Speanow
+* Linux: $HOME/.config/Speaknow
