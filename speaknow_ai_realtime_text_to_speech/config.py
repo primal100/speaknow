@@ -33,7 +33,8 @@ class ConfigManager:
             self.save(self.defaults)
             return self.defaults
         with open(self.config_file, "r") as f:
-            return {**self.defaults, **yaml.safe_load(f)}
+            saved = yaml.safe_load(f)
+            return {**self.defaults, **({} if saved is None else saved)}
 
     def save(self, data: dict):
         with open(self.config_file, "w") as f:

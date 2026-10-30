@@ -3,10 +3,12 @@ google-genai
 sounddevice
 audioop-lts; python_version >= '3.13'
 numpy
-pydub
 textual
 textual-dev
 textual_serve
 PyYAML
 typing_extensions
 gpt-token-tracker
+pytest
+pytest-asyncio
+pytest-cov

@@ -28,20 +28,6 @@ class GeminiLiveService(BaseAIService):
     prefix = "gemini"
     client: genai.Client
     session: google.genai.live.AsyncSession | None
-    # Note: Pricing is based on 2026 rates for Gemini 2.5 Flash Native Audio
-    realtime_costs = {"gemini-2.5-flash-native-audio-preview-12-2025": {
-        "text_in": 0.10,
-        "image_in": 0.10,
-        "video_in": 0.10,
-        "audio_in": 0.30,
-        "cached_text_in": 0.01,
-        "cached_video_in": 0.01,
-        "cached_image_in": 0.01,
-        "cached_audio_in": 0.03,
-        "text_out": 0.40,
-        "audio_out": 0.40,
-        "thinking": 0.40
-    }}
     # Gemini uses specific usage metadata keys
     realtime_pricing_cls = PricingGemini
     transcription_pricing_cls = None
@@ -61,8 +47,6 @@ class GeminiLiveService(BaseAIService):
             api_key=os.environ[self.user_config["api_key_env"]],
             )
         self.session = None
-        self.connected = asyncio.Event()
-        self.response_in_progress = asyncio.Event()
 
     async def send_audio(self, data: np.ndarray, sent_audio: bool) -> bool:
         if not self.session:
@@ -111,7 +95,6 @@ class GeminiLiveService(BaseAIService):
         try:
             async with self.client.aio.live.connect(model=model_id, config=config) as session:
                 self.session = session
-                self.connected.set()
                 log.info("Gemini Live Session Started")
                 event_queue.put_nowait({"type": "session_updated"})
                 event_queue.put_nowait({"type": "session_id", "session_id": f"{model_id}"})
@@ -156,7 +139,6 @@ class GeminiLiveService(BaseAIService):
                                 if current_output_transcription:
                                     last_output_transcription = current_output_transcription
                                     current_output_transcription = ""
-                                self.response_in_progress.clear()
 
                             if message.server_content.interrupted:
                                 log.info("Gemini response interrupted by user")
@@ -175,7 +157,6 @@ class GeminiLiveService(BaseAIService):
         except Exception as e:
             log.error(f"Gemini Connection Error: {e}")
         finally:
-            self.connected.clear()
             self.session = None
 
     async def request_response(self) -> None: ...

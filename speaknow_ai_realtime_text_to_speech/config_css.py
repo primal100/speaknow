@@ -1,14 +1,4 @@
 CSS = """
-#config-dialog {
-    background: #1a1b26;
-    border: thick rgb(91, 164, 91);
-    height: 80vh;  /* Fixed height for the modal */
-    width: 80%;
-    margin: 2 4;
-    padding: 0;   /* Remove padding here so header/footer hit the edges */
-    layout: vertical;
-}
-
 /* Sticky Header */
 #config-title {
     text-align: center;

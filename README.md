@@ -9,7 +9,6 @@ This project is based on and inspired by the `push_to_talk_app.py` example from 
 
 * **Low-Latency Speech-to-Speech:** Direct multimodal interaction using the `gpt-realtime` or `gpt-realtime-mini` or ``gemini-2.5-flash-native-audio`` models for near-instant responses.
 * **Real-time Transcription:** View live streaming transcripts of your conversation as you speak.
-* **Advanced Audio Handling:** Save input speech to local WAV files for record-keeping or debugging.
 * **Configurable Parameters:** Easily adjust system prompts, model names, mode, and transcription options through a built-in TUI settings menu.
 * **Professional TUI:** A clean, "sticky" interface with persistent headers, footers, and scrollable settings panes using ```textual```.
 * **Voice Amplitude Monitor:** Monitor the volume of the voice input
@@ -36,6 +35,19 @@ For linux, portaudio19-dev and ffmpeg are required. For example, to install on U
 ```bash
 sudo apt install portaudio19-dev ffmpeg
 ```
+
+## Development tests
+
+Install the application and test dependencies, then run pytest:
+
+```bash
+python -m pip install -e ".[test]"
+python -m pytest
+python -m pytest --cov --cov-report=term-missing
+```
+
+Tests use temporary application directories and fake API clients/audio streams.
+They do not need API keys, microphone access, or live API requests.
 
 ## Usage
 

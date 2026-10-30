@@ -8,16 +8,9 @@ from gpt_token_tracker.writers.log_writer import LogWriter
 from gpt_token_tracker.token_logger import TokenLogger
 from gpt_token_tracker.writers.csv_writer import CSVWriter
 from pathlib import Path
-from typing import Any, Type, TYPE_CHECKING
+from typing import Any, Type
 from ..directories import get_token_dir
 from .prices import realtime_costs, transcription_costs
-
-# Avoid circular import
-if TYPE_CHECKING:
-    from ..widgets import SessionDisplay
-else:
-    SessionDisplay = object
-
 
 TOKENS_DIR = get_token_dir()
 log_writer = LogWriter("realtime_tokens")
@@ -44,7 +37,6 @@ class BaseAIService(ABC):
             self.csv_token_logger_realtime = TokenLogger(self.csv_writer_realtime, self.realtime_pricing_cls(realtime_costs))
         else:
             self.realtime_convo_csv = None
-            self.realtime_tokens_csv = None
             self.token_logger_realtime = None
             self.csv_writer_realtime = None
             self.csv_token_logger_realtime = None
@@ -54,8 +46,6 @@ class BaseAIService(ABC):
             self.token_logger_realtime_transcription = TokenLogger(log_writer, self.transcription_pricing_cls(transcription_costs))
             self.csv_token_logger_realtime_transcription = TokenLogger(self.csv_writer_realtime_transcribe, self.transcription_pricing_cls(transcription_costs))
         else:
-            self.token_logger_realtime_transcription = None
-            self.csv_token_logger_realtime_transcription = None
             self.token_logger_realtime_transcription = None
             self.csv_writer_realtime_transcribe = None
             self.csv_token_logger_realtime_transcription = None
