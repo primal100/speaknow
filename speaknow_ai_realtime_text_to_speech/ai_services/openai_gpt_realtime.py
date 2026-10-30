@@ -32,7 +32,7 @@ class OpenAIGPTRealtime(BaseAIService):
     @classmethod
     def set_default_config_options_on_change(cls) -> dict[str, Any]:
         return {
-            'model': "gpt-realtime-mini",
+            'model': "gpt-realtime-2.1-mini",
             'base_url': os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1",
             'api_key_env': "OPENAI_API_KEY",
             'transcription_model': "gpt-4o-mini-transcribe",

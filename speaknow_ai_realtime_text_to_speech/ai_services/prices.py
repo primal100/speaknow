@@ -1,4 +1,25 @@
+# USD per 1M tokens, except per_interval (USD per 60 seconds).
 realtime_costs = {
+    "gpt-realtime-2.1": {
+        "text_in": 4.00,
+        "cached_text_in": 0.40,
+        "text_out": 24.00,
+        "audio_in": 32.00,
+        "audio_out": 64.00,
+        "image_in": 5.00,
+        "cached_image_in": 0.50,
+        "cached_audio_in": 0.40,
+    },
+    "gpt-realtime-2.1-mini": {
+        "text_in": 0.60,
+        "cached_text_in": 0.06,
+        "text_out": 2.40,
+        "audio_in": 10.00,
+        "audio_out": 20.00,
+        "image_in": 0.80,
+        "cached_image_in": 0.08,
+        "cached_audio_in": 0.30,
+    },
     "gpt-realtime": {
         "text_in": 4.00,
         "cached_text_in": 0.40,
@@ -19,6 +40,36 @@ realtime_costs = {
         "cached_image_in": 0.08,
         "cached_audio_in": 0.30,
     },
+    # https://aistudio.google.com/docs/pricing#gemini-3.8-live
+    # Paid-tier token rates; search grounding is billed separately per request.
+    # No cached-input rates are published for these Live models.
+    "gemini-3.8-live": {
+        "text_in": 0.75,
+        "image_in": 1.00,
+        "video_in": 1.00,
+        "audio_in": 3.00,
+        "text_out": 4.50,
+        "audio_out": 12.00,
+        "thinking": 4.50,
+    },
+    "gemini-3.8-live-extended-thinking": {
+        "text_in": 0.75,
+        "image_in": 1.00,
+        "video_in": 1.00,
+        "audio_in": 3.00,
+        "text_out": 4.50,
+        "audio_out": 12.00,
+        "thinking": 4.50,
+    },
+    "gemini-3.1-flash-live-preview": {
+        "text_in": 0.75,
+        "image_in": 1.00,
+        "video_in": 1.00,
+        "audio_in": 3.00,
+        "text_out": 4.50,
+        "audio_out": 12.00,
+        "thinking": 4.50,
+    },
     "gemini-2.5-flash-native-audio-preview-12-2025": {
         "text_in": 0.10,
         "image_in": 0.10,
@@ -31,6 +82,14 @@ realtime_costs = {
         "text_out": 0.40,
         "audio_out": 0.40,
         "thinking": 0.40
+    },
+    # https://docs.x.ai/developers/models/grok-voice-3.0
+    # Speech-to-speech only; standalone TTS/STT use different billing units.
+    "grok-voice-3.0": {
+        "per_interval": 0.08,
+    },
+    "grok-voice-latest": {
+        "per_interval": 0.08,
     },
     "grok-4": {
         "per_interval": 0.05,
