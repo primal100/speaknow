@@ -14,7 +14,7 @@ ai_services = {
 
 AI_SERVICES_SELECTION = [("OpenAI GPT", "openai"), ("Google Gemini", "google"), ("xAI Grok Voice", "xai")]
 DEFAULT_AI_SERVICE = "openai"
-DEFAULT_AI_SERVICE_MODEL = "gpt-realtime-mini"
+DEFAULT_AI_SERVICE_MODEL = OpenAIGPTRealtime.set_default_config_options_on_change()['model']
 DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
 
 

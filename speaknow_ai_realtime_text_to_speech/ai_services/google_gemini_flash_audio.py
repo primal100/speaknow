@@ -35,7 +35,7 @@ class GeminiLiveService(BaseAIService):
     @classmethod
     def set_default_config_options_on_change(cls) -> dict[str, Any]:
         return {
-            'model': "gemini-2.5-flash-native-audio-preview-12-2025",
+            'model': "gemini-3.8-live",
             'api_key_env': "GEMINI_API_KEY",
             'base_url': os.environ.get("GEMINI_NEXT_GEN_API_BASE_URL") or 'https://generativelanguage.googleapis.com/',
             'DISABLED': ('mode', 'transcription_model', 'audio', 'language')
@@ -74,7 +74,7 @@ class GeminiLiveService(BaseAIService):
         current_transcription: str = ""
         last_output_transcription: str = ""
         current_output_transcription: str = ""
-        model_id = self.user_config.get('model', 'gemini-2.5-flash-native-audio-preview-12-2025')
+        model_id = self.user_config.get('model', self.set_default_config_options_on_change()['model'])
         # Should be self.user_config.get('output_modalities') but anything other than just 'audio' is rejeceted at least as of gemini-2.5-flash-native-audio-preview-12-2025"
         output_modalities = ["audio"]
         # explicit_vad_signal gets rejected here as of gemini-2.5-flash-native-audio-preview-12-2025 "explicit_vad_signal is not supported in Gemini API"

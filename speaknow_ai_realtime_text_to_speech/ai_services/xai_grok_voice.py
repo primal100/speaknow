@@ -18,7 +18,7 @@ class XAIGrokVoice(OpenAIGPTRealtime):
     @classmethod
     def set_default_config_options_on_change(cls) -> dict[str, Any]:
         return {
-            'model': "grok-4",
+            'model': "grok-voice-3.0",
             'base_url': "https://api.x.ai/v1",
             'api_key_env': "XAI_API_KEY",
             'transcription_model': "gpt-4o-mini-transcribe",
