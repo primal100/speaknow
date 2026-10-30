@@ -12,3 +12,4 @@ gpt-token-tracker
 pytest
 pytest-asyncio
 pytest-cov
+pytest-timeout
