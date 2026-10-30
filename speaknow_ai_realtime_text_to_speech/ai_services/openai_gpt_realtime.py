@@ -12,10 +12,9 @@ from openai.types.realtime.session_update_event_param import Session  # https://
 from openai.resources.realtime.realtime import AsyncRealtimeConnection  # Another bug?
 from openai.types.realtime.realtime_audio_input_turn_detection_param import ServerVad, SemanticVad
 from typing import Any, cast
-from .base import BaseAIService, LogWriter
+from .base import BaseAIService
 
 
-log_writer = LogWriter("realtime_tokens")
 log = logging.getLogger("realtime_app")
 events_log = logging.getLogger("events")
 
@@ -68,6 +67,7 @@ class OpenAIGPTRealtime(BaseAIService):
         return sent_audio
 
     async def handle_realtime_connection(self, event_queue: asyncio.Queue[dict[str, Any]]) -> None:
+        connection_start_time = None
         try:
             async with self.client.realtime.connect(model=self.user_config['model']) as conn:
                 connection_start_time = datetime.datetime.now()
@@ -241,19 +241,10 @@ class OpenAIGPTRealtime(BaseAIService):
                             log.warning("No token usage info in response.")
                             continue
 
-                        if event.type == "rate_limits.updated":
-                            for rl in event.rate_limits:
-                                log.debug(
-                                    "[RATE LIMIT] name=%s | limit=%s | remaining=%s | reset_in=%.3fs",
-                                    rl.name,
-                                    rl.limit,
-                                    rl.remaining,
-                                    rl.reset_seconds,
-                                )
-
                         continue
         finally:
-            await self.write_connection_time(self.user_config['model'], connection_start_time)
+            if connection_start_time is not None:
+                await self.write_connection_time(self.user_config['model'], connection_start_time)
             log.debug('Clearing events')
             self.connected.clear()
             self.connection = None

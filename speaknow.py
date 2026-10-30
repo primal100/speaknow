@@ -18,13 +18,11 @@ except OSError:
 
 from speaknow_ai_realtime_text_to_speech.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
 import audioop
-import time
 
 from speaknow_ai_realtime_text_to_speech.app_css import CSS
 from speaknow_ai_realtime_text_to_speech import version
 from speaknow_ai_realtime_text_to_speech.directories import (APP_NAME, HOME, get_log_config_file,
-                                                             get_default_log_config_file, get_log_dir,
-                                                             get_token_dir)
+                                                             get_default_log_config_file, get_log_dir)
 from speaknow_ai_realtime_text_to_speech.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
                                                          TextualLogMessage, TextualPaneLogHandler, ConfigModal)
 from speaknow_ai_realtime_text_to_speech.config import ConfigManager
@@ -38,19 +36,8 @@ from textual.containers import Container, Horizontal
 
 from speaknow_ai_realtime_text_to_speech.ai_services import get_ai_service, BaseAIService
 
-# Ignore pydub warning in python 3.14
-# site-packages\pydub\utils.py:300: SyntaxWarning: "\(" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\("? A raw string is also an option.
-import warnings
-
-warnings.filterwarnings(
-    "ignore",
-    category=SyntaxWarning,
-    module=r"pydub\..*",
-)
-
 LOG_CONFIG_FILE = get_log_config_file()
 BASE_LOG_DIR = get_log_dir()
-TOKENS_DIR = get_token_dir()
 
 if not LOG_CONFIG_FILE.exists():
     PACKAGE_LOG_CONFIG_PATH = get_default_log_config_file()
@@ -71,7 +58,6 @@ class RealtimeApp(App[None]):
     ai_service: BaseAIService | None
     should_send_audio: asyncio.Event
     audio_player: AudioPlayerAsync
-    connected: asyncio.Event
     event_queue: asyncio.Queue[dict[str, Any]]
     event_queue_worker: Worker | None = None
     handle_realtime_connection_worker: Worker | None = None
@@ -86,13 +72,10 @@ class RealtimeApp(App[None]):
         self.audio_player = AudioPlayerAsync()
 
         self.session_updated = asyncio.Event()
-        self.speech_ongoing = asyncio.Event()
-        self.speech_done = asyncio.Event()
         self.connection_cancelled = asyncio.Event()
         self.connection_cancelled.set()
         self.should_send_audio = asyncio.Event()
         self.event_queue = asyncio.Queue()
-        self.start_time = time.time()
 
     @override
     def compose(self) -> ComposeResult:
@@ -110,10 +93,6 @@ class RealtimeApp(App[None]):
             yield RichLog(id="middle-pane", wrap=True, highlight=True, markup=True)
             yield RichLog(id="lower-middle-pane", wrap=True, highlight=True, markup=True)
             yield RichLog(id="bottom-pane", wrap=True, highlight=True, markup=True)
-
-    def worker_callback(self, worker) -> None:
-        if exc := worker.get_exception():
-            log.error("Worker %s failed with exception: %s", worker, exc)
 
     async def on_mount(self) -> None:
         # Attach log handler
@@ -191,8 +170,6 @@ class RealtimeApp(App[None]):
                     self.session_updated.set()
 
                 elif event['type'] == "audio_response":
-                    if event["is_first_in_response"]:
-                        self.audio_player.reset_frame_count()
                     if self.user_config['play_audio']:
                         self.audio_player.add_data(event["data"])
 
@@ -214,14 +191,10 @@ class RealtimeApp(App[None]):
                     continue
 
                 elif event["type"] == "speech_started":
-                    self.speech_ongoing.set()
-                    self.speech_done.clear()
                     speech_start_times[event["item_id"]] = datetime.now()
                     log.info("%s Speech started", event["item_id"])
 
                 elif event["type"] == "speech_stopped":
-                    self.speech_done.set()
-                    self.speech_ongoing.clear()
                     end = datetime.now()
                     start = speech_start_times.get(event["item_id"])
                     if start:
@@ -240,53 +213,51 @@ class RealtimeApp(App[None]):
             log.error("Failed to update session, existing")
             self.exit()
 
-        async with asyncio.TaskGroup() as tg:
-            amp_widget = self.query_one("#amp-graph", AmplitudeGraph)
+        amp_widget = self.query_one("#amp-graph", AmplitudeGraph)
 
-            sent_audio = False
+        sent_audio = False
 
-            device_info = sd.query_devices()
-            print(device_info)
+        device_info = sd.query_devices()
+        print(device_info)
 
-            read_size = int(SAMPLE_RATE * 0.02)
+        read_size = int(SAMPLE_RATE * 0.02)
 
-            stream = sd.InputStream(
-                channels=CHANNELS,
-                samplerate=SAMPLE_RATE,
-                dtype="int16",
-            )
-            stream.start()
+        stream = sd.InputStream(
+            channels=CHANNELS,
+            samplerate=SAMPLE_RATE,
+            dtype="int16",
+        )
+        stream.start()
 
-            status_indicator = self.query_one(AudioStatusIndicator)
+        status_indicator = self.query_one(AudioStatusIndicator)
 
-            try:
+        try:
 
-                while True:
+            while True:
 
-                    if stream.read_available < read_size:
-                        await asyncio.sleep(0)
-                        continue
-
-                    await self.should_send_audio.wait()
-                    status_indicator.is_recording = True
-
-                    data, _ = stream.read(read_size)
-
-                    sent_audio = await self.ai_service.send_audio(data, sent_audio)
-
-                    rms = audioop.rms(data, 2)  # 2 bytes = 16-bit
-                    peak = min(rms / 30000.0, 1.0)  # normalize to 0–1 range
-
-                    amp_widget.amplitude = peak
-
+                if stream.read_available < read_size:
                     await asyncio.sleep(0)
-            except KeyboardInterrupt:
-                pass
-            finally:
-                log.debug("Stopping mic stream...")
-                stream.stop()
-                stream.close()
-                log.debug(tg._tasks)
+                    continue
+
+                await self.should_send_audio.wait()
+                status_indicator.is_recording = True
+
+                data, _ = stream.read(read_size)
+
+                sent_audio = await self.ai_service.send_audio(data, sent_audio)
+
+                rms = audioop.rms(data, 2)  # 2 bytes = 16-bit
+                peak = min(rms / 30000.0, 1.0)  # normalize to 0–1 range
+
+                amp_widget.amplitude = peak
+
+                await asyncio.sleep(0)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            log.debug("Stopping mic stream...")
+            stream.stop()
+            stream.close()
 
     def show_config(self) -> None:
         self.push_screen(ConfigModal(), self.apply_config)
@@ -301,11 +272,7 @@ class RealtimeApp(App[None]):
 
             # Logic: Refresh the OpenAI connection with new prompt/model
             # You might need to trigger a session.update event here
-            await self.refresh_session()
-
-    async def refresh_session(self):
-        """Helper to push new config to the active OpenAI connection."""
-        await self.restart_workers()
+            await self.restart_workers()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "send-button":

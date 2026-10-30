@@ -13,16 +13,29 @@ authors = [
 ]
 dependencies = [
     "openai[realtime]",
+    "google-genai",
     "sounddevice",
     "audioop-lts; python_version >= '3.13'",
     "numpy",
-    "pydub",
     "textual",
     "textual-dev",
     "textual_serve",
     "PyYAML",
+    "typing_extensions",
     "gpt-token-tracker"
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-asyncio>=0.24", "pytest-cov>=5", "pytest-timeout>=2.4.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["speaknow", "speaknow_ai_realtime_text_to_speech"]
+omit = ["*/app_css.py", "*/config_css.py", "*/__version__.py"]
 
 [project.scripts]
 speaknow = "speaknow:run"

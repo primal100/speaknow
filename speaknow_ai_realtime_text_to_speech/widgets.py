@@ -12,9 +12,6 @@ from .ai_services import ai_services, AI_SERVICES_SELECTION
 from typing_extensions import override
 
 
-default_service = "openai"
-
-
 class AmplitudeGraph(Widget):
     """Displays a simple bar graph of audio amplitude."""
     amplitude = reactive(0.0)  # 0.0 → 1.0
@@ -166,9 +163,6 @@ class ConfigModal(ModalScreen[dict]):
             yield Button("Save", variant="success", id="save_config")
             yield Button("Cancel", variant="error", id="cancel_config")
 
-    def get_field(self, fieldname: str) -> Widget:
-        return self.query_one(f"Input[name='{fieldname}'], Select[name='{fieldname}']")
-
     @on(Select.Changed, "#ai-service-select")
     def handle_service_change(self, event: Select.Changed) -> None:
         new_service = event.value
@@ -203,14 +197,6 @@ class ConfigModal(ModalScreen[dict]):
             new_settings = {}
             for control in self.query("Input, Select, Checkbox").exclude(".modality-check"):
                 val = control.value
-
-                # Special handling for our number fields
-                if input_type := getattr(control, "type", None):
-                    if any(input_type == number_type for number_type in ("integer", "number")):
-                        try:
-                            val = int(val) if val.strip() != "" else None
-                        except ValueError:
-                            val = None
 
                 new_settings[control.name] = val
             selected_modalities = [
