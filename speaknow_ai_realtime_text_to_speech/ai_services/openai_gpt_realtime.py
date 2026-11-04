@@ -66,57 +66,62 @@ class OpenAIGPTRealtime(BaseAIService):
         await connection.input_audio_buffer.append(audio=base64.b64encode(cast(Any, data)).decode("utf-8"))
         return sent_audio
 
+    def _connect(self):
+        return self.client.realtime.connect(model=self.user_config["model"])
+
+    def _session_config(self) -> Session:
+        # note: this is the default and can be omitted
+        # if you want to manually handle VAD yourself, then set `'turn_detection': None`
+
+        turn_detection: ServerVad | SemanticVad | None = None
+        mode = self.user_config['mode']
+
+        if mode == "server":
+            turn_detection: ServerVad = {
+                "type": "server_vad",
+                "idle_timeout_ms": 5000
+            }
+        elif mode == "semantic":
+            turn_detection: SemanticVad = {
+                "type": "semantic_vad",
+                "eagerness": "high"
+            }
+
+        if self.user_config['transcription_enabled']:
+            transcription_info = {
+                "language": self.user_config['language'],
+                "model": self.user_config['transcription_model'],
+            }
+        else:
+            transcription_info = None
+
+        log.info("Updating session with model %s, prompt %s",
+                 self.user_config['model'], self.user_config['prompt'])
+        log.info("Turn Detection: %s", turn_detection)
+        log.info("Transcription Info: %s", transcription_info)
+
+        return {
+            "audio": {
+                "input": {
+                    "turn_detection": turn_detection,
+                    "transcription": transcription_info,
+                },
+            },
+            "instructions": self.user_config['prompt'],
+            "output_modalities": self.user_config.get('output_modalities'),
+            "model": self.user_config['model'],
+            "type": "realtime",
+        }
+
     async def handle_realtime_connection(self, event_queue: asyncio.Queue[dict[str, Any]]) -> None:
         connection_start_time = None
         try:
-            async with self.client.realtime.connect(model=self.user_config['model']) as conn:
+            async with self._connect() as conn:
                 connection_start_time = datetime.datetime.now()
                 self.connection = conn
                 self.connected.set()
 
-                # note: this is the default and can be omitted
-                # if you want to manually handle VAD yourself, then set `'turn_detection': None`
-
-                turn_detection: ServerVad | SemanticVad | None = None
-                mode = self.user_config['mode']
-
-                if mode == "server":
-                    turn_detection: ServerVad = {
-                        "type": "server_vad",
-                        "idle_timeout_ms": 5000
-                    }
-                elif mode == "semantic":
-                    turn_detection: SemanticVad = {
-                        "type": "semantic_vad",
-                        "eagerness": "high"
-                    }
-
-                if self.user_config['transcription_enabled']:
-                    transcription_info = {
-                        "language": self.user_config['language'],
-                        "model": self.user_config['transcription_model'],
-                    }
-                else:
-                    transcription_info = None
-
-                log.info("Updating session with model %s, prompt %s",
-                         self.user_config['model'], self.user_config['prompt'])
-                log.info("Turn Detection: %s", turn_detection)
-                log.info("Transcription Info: %s", transcription_info)
-
-                await conn.session.update(
-                    session={
-                        "audio": {
-                            "input": {"turn_detection": turn_detection,
-                                      "transcription": transcription_info
-                                      },
-                        },
-                        "instructions": self.user_config['prompt'],
-                        "output_modalities": self.user_config.get('output_modalities'),
-                        "model": self.user_config['model'],
-                        "type": "realtime",
-                    }
-                )
+                await conn.session.update(session=self._session_config())
 
                 acc_items: dict[str, Any] = {}
                 transcription_items: dict[str, Any] = {}
@@ -188,14 +193,13 @@ class OpenAIGPTRealtime(BaseAIService):
                     if event.type == "conversation.item.input_audio_transcription.completed":
                         log.debug("Audio realtime transcription response done for %s", event.item_id)
                         log.debug("Type: %s", type(event))
-                        try:
-                            text = transcription_items[event.item_id]
-                        except KeyError:
-                            transcription_items[event.item_id] = event.transcript
-                            text = transcription_items[event.item_id]
+                        text = event.transcript
+                        transcription_items[event.item_id] = text
+                        event_queue.put_nowait({"type": "transcription_received",
+                                                "item_id": event.item_id, "text": text})
                         log.info("[TRANSCRIPTION] REALTIME: %s", text)
 
-                        if usage := getattr(event, "usage"):
+                        if usage := getattr(event, "usage", None):
                             log.debug("Type: %s", type(usage))
                             await self.write_realtime_transcribe_tokens_wrapper(
                                 self.user_config['transcription_model'],
@@ -230,7 +234,7 @@ class OpenAIGPTRealtime(BaseAIService):
                                      getattr(status_details, "reason", ""), getattr(status_details, "error", ""), result)
                         else:
                             log.info("%s Response is done, status: %s, result: %s", event.response.id, status, result)
-                        if usage := getattr(event.response, "usage"):
+                        if usage := getattr(event.response, "usage", None):
                             if getattr(usage, "total_tokens", None) is not None:
                                 await self.write_realtime_tokens_wrapper(
                                                     self.user_config['model'],
