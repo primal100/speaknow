@@ -29,6 +29,13 @@ def transport(monkeypatch):
 
     from speaknow_ai_realtime_text_to_speech.ai_services import elevenlabs_realtime
 
+    # New SDKs subclass websockets.connect in a lazily imported wrapper. Load
+    # that wrapper before replacing its base class, then patch both entry points.
+    try:
+        from openai.lib import _websocket
+    except ImportError:
+        _websocket = None
+
     requests = []
     replies = [httpx.Response(200, json={"value": "ephemeral-test-secret"})]
 
@@ -51,6 +58,8 @@ def transport(monkeypatch):
     )
     connect = AsyncMock(return_value=websocket)
     monkeypatch.setattr(websockets.asyncio.client, "connect", connect)
+    if _websocket is not None:
+        monkeypatch.setattr(_websocket, "_WebSocketConnect", connect)
     return NS(requests=requests, replies=replies, clients=clients, ws=websocket, connect=connect)
 
 
