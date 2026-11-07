@@ -127,6 +127,8 @@ class OpenAIGPTRealtime(BaseAIService):
                 transcription_items: dict[str, Any] = {}
 
                 async for event in conn:
+                    if event.type == "error":
+                        raise ConnectionError("The provider rejected the session; check API settings")
                     events_log.info("Event Type: %s. Item Id: %s", event.type, getattr(event, "item_id", ""))
                     events_log.debug(event)
                     if event.type == "session.created":

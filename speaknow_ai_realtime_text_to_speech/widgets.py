@@ -77,6 +77,43 @@ class TextualPaneLogHandler(Handler):
             self.handleError(record)
 
 
+class ConnectionErrorModal(ModalScreen[str]):
+    """Keep connection failures visible while leaving configuration accessible."""
+
+    DEFAULT_CSS = """
+    ConnectionErrorModal { align: center middle; background: $background 70%; }
+    ConnectionErrorModal > Vertical {
+        width: 72; max-width: 95%; height: auto; padding: 1 2;
+        border: thick $error; background: $surface;
+    }
+    ConnectionErrorModal Static { height: auto; margin-bottom: 1; }
+    ConnectionErrorModal Horizontal { height: auto; }
+    ConnectionErrorModal Button { margin-right: 1; }
+    """
+    BINDINGS = [("escape", "dismiss_error", "Close")]
+
+    def __init__(self, message: str):
+        super().__init__()
+        self.message = message
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Unable to start the voice session", markup=False)
+            yield Static(self.message, markup=False)
+            with Horizontal():
+                yield Button("Open Settings", id="error-settings", variant="primary")
+                yield Button("Retry", id="error-retry")
+                yield Button("Close", id="error-close")
+
+    @on(Button.Pressed)
+    def handle_choice(self, event: Button.Pressed) -> None:
+        event.stop()
+        self.dismiss(event.button.id.removeprefix("error-"))
+
+    def action_dismiss_error(self) -> None:
+        self.dismiss("close")
+
+
 class ConfigModal(ModalScreen[dict]):
     """A modal screen to edit application settings."""
 

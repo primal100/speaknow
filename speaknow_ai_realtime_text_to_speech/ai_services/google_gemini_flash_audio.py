@@ -156,6 +156,7 @@ class GeminiLiveService(BaseAIService):
             raise
         except Exception as e:
             log.error(f"Gemini Connection Error: {e}")
+            raise
         finally:
             self.session = None
 
