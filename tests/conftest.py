@@ -14,7 +14,7 @@ def isolated_environment(monkeypatch, tmp_path, audio_backend):
     from speaknow_ai_realtime_text_to_speech import directories
 
     monkeypatch.setattr(directories, "HOME", tmp_path / "Speaknow")
-    for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "XAI_API_KEY"):
+    for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "XAI_API_KEY", "ELEVENLABS_API_KEY"):
         monkeypatch.setenv(name, "test-key-not-a-real-credential")
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("GEMINI_NEXT_GEN_API_BASE_URL", raising=False)

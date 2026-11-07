@@ -1,6 +1,6 @@
 # SpeakNow
 
-SpeakNow is a high-performance, real-time AI voice interface built that runs on either OpenAI Realtime API, Google Gemini Flash Native Audio Live API or Grok Voice. It provides a seamless, low-latency speech-to-speech conversational experience directly in your terminal.
+SpeakNow is a high-performance, real-time AI voice interface that runs on OpenAI Realtime API, Google Gemini Flash Native Audio Live API, Grok Voice, or ElevenLabs Realtime. It provides a seamless, low-latency speech-to-speech conversational experience directly in your terminal.
 
 In additional to the textual TUI, various parts of the code can be used in other applications as a library particularly the code in ```speaknow_ai_realtime_text_to_speech.py/ai_services``` path. Documentation for a stable API is planned in near future.
 This project is based on and inspired by the `push_to_talk_app.py` example from the [openai-python](https://github.com/openai/openai-python/blob/main/examples/realtime/push_to_talk_app.py) repository but with lots of features added and support for other AI services.
@@ -53,7 +53,7 @@ They do not need API keys, microphone access, or live API requests.
 
 ### Configuration
 Before running, ensure your OPENAI_API_KEY is set in your environment variables as minimum. 
-GEMINI_API_KEY and XAI_API_KEY can also be set if those services are needed.
+GEMINI_API_KEY, XAI_API_KEY, and ELEVENLABS_API_KEY can also be set if those services are needed.
 
 In Windows open the Edit Environmnent Variables GUI and add it there.
 
@@ -101,6 +101,24 @@ Manual mode is triggered by hitting "Start," speaking and then hitting "Stop." t
 Server VAD and uses periods of silence to automatically chunk the audio.
 Semantic VAD  uses a semantic classifier to detect when the user has finished speaking, based on the words they have uttered.
 This setting will be ignored in Gemini which uses it's default VAD mechanism only.
+
+### ElevenLabs Realtime
+
+Set `ELEVENLABS_API_KEY`, open Settings (`C`), and select **ElevenLabs Realtime**.
+The default is `eleven_realtime_v1_mini`, optimized for speed; you can change the
+model to `eleven_realtime_v1_max` for more complex tasks. No dashboard agent ID
+is required. Keep the base URL as `https://api.elevenlabs.io/v1/convai`.
+
+The service uses 24 kHz PCM audio, the Brian voice, and semantic turn detection.
+Speak normally and allow a pause for the reply. Manual turn commits, separate
+transcription model/language selection, and local cost tracking are not exposed
+for this provider. Configure the system prompt in SpeakNow as usual.
+
+Authentication uses a fresh short-lived client secret for each WebSocket
+connection, following the [ElevenLabs Realtime compatibility guide](https://elevenlabs.io/docs/eleven-agents/guides/openai-realtime-compatibility).
+That guide currently documents browser clients; this adapter uses the same
+protocol through the Python OpenAI SDK. Automated tests mock the service;
+a live account is needed to verify end-to-end audio and account access.
 
 ### Application Data
 
