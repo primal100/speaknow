@@ -2,6 +2,7 @@
 
 import asyncio
 import logging.config
+import os
 import shutil
 from datetime import datetime
 from typing import Any
@@ -24,7 +25,9 @@ from speaknow_ai_realtime_text_to_speech import version
 from speaknow_ai_realtime_text_to_speech.directories import (APP_NAME, HOME, get_log_config_file,
                                                              get_default_log_config_file, get_log_dir)
 from speaknow_ai_realtime_text_to_speech.widgets import (AmplitudeGraph, SessionDisplay, AudioStatusIndicator,
-                                                         TextualLogMessage, TextualPaneLogHandler, ConfigModal)
+                                                         TextualLogMessage, TextualPaneLogHandler, ConfigModal,
+                                                         ConnectionErrorModal)
+from speaknow_ai_realtime_text_to_speech.connection_errors import connection_error_message
 from speaknow_ai_realtime_text_to_speech.config import ConfigManager
 from speaknow_ai_realtime_text_to_speech.utils import update_log_config
 
@@ -68,6 +71,7 @@ class RealtimeApp(App[None]):
         self.config_manager = ConfigManager()
         self.user_config = self.config_manager.load()
         self.ai_service = None
+        self._connection_error_shown = False
 
         self.audio_player = AudioPlayerAsync()
 
@@ -121,6 +125,7 @@ class RealtimeApp(App[None]):
             self.handle_realtime_connection_worker.cancel()
 
         await self.connection_cancelled.wait()
+        self._connection_error_shown = False
 
         if self.event_queue_worker and not self.event_queue_worker.is_finished:
             log.debug("Cancelling event queue process worker, will wait for queue to complete first")
@@ -132,13 +137,9 @@ class RealtimeApp(App[None]):
 
             self.event_queue_worker.cancel()
 
-        self.event_queue_worker = self.run_worker(self.process_event_queue())
-        self.handle_realtime_connection_worker = self.run_worker(self.handle_realtime_connection())
-        self.send_mic_audio_worker = self.run_worker(self.send_mic_audio())
-
-        if self.user_config['immediate_initialisation']:
-            await asyncio.sleep(1)
-            await self.toggle_recording()
+        self.event_queue_worker = self.run_worker(self.process_event_queue)
+        self.handle_realtime_connection_worker = self.run_worker(self.handle_realtime_connection)
+        self.send_mic_audio_worker = self.run_worker(self.send_mic_audio)
 
     async def on_textual_log_message(self, message: TextualLogMessage) -> None:
         """Receive log messages sent by the log handler and write them to the pane."""
@@ -147,14 +148,50 @@ class RealtimeApp(App[None]):
 
     async def handle_realtime_connection(self) -> None:
         self.connection_cancelled.clear()
-        self.ai_service = get_ai_service(self.user_config)
+        service = None
+        self.ai_service = None
         try:
-            await self.ai_service.handle_realtime_connection(self.event_queue)
+            key_name = self.user_config["api_key_env"]
+            if not os.environ.get(key_name, "").strip():
+                raise KeyError(key_name)
+            service = self.ai_service = get_ai_service(self.user_config)
+            await service.handle_realtime_connection(self.event_queue)
+            raise ConnectionError("The provider closed the connection")
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            self.show_connection_error(error)
         finally:
-            log.debug('Clearing events')
             self.session_updated.clear()
-            self.connection_cancelled.set()
-            await self.ai_service.cleanup_resources()
+            self.should_send_audio.clear()
+            if self.send_mic_audio_worker and not self.send_mic_audio_worker.is_finished:
+                self.send_mic_audio_worker.cancel()
+            try:
+                if service is not None:
+                    await service.cleanup_resources()
+            except Exception as error:
+                log.error("Session cleanup failed: %s", type(error).__name__)
+            finally:
+                self.ai_service = None
+                self.connection_cancelled.set()
+
+    def show_connection_error(self, error: Exception) -> None:
+        if self._connection_error_shown:
+            return
+        self._connection_error_shown = True
+        message = connection_error_message(error, self.user_config)
+        log.error("%s", message)
+        self.should_send_audio.clear()
+        self.query_one(AudioStatusIndicator).is_recording = False
+        self.query_one("#send-button", Button).label = "Record"
+        self.query_one(SessionDisplay).session_id = "Disconnected"
+        self.push_screen(ConnectionErrorModal(message), self.handle_connection_error_choice)
+
+    async def handle_connection_error_choice(self, choice: str | None) -> None:
+        if choice == "settings":
+            self.show_config()
+        elif choice == "retry":
+            await self.restart_workers()
 
     async def process_event_queue(self) -> None:
         speech_start_times: dict[str, datetime] = {}
@@ -206,12 +243,24 @@ class RealtimeApp(App[None]):
                 self.event_queue.task_done()
 
     async def send_mic_audio(self) -> None:
+        try:
+            await self._send_mic_audio()
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            self.show_connection_error(error)
+            if self.handle_realtime_connection_worker and not self.handle_realtime_connection_worker.is_finished:
+                self.handle_realtime_connection_worker.cancel()
+
+    async def _send_mic_audio(self) -> None:
         log.info("Starting mic audio task")
         try:
             await asyncio.wait_for(self.session_updated.wait(), timeout=10)
         except asyncio.TimeoutError:
-            log.error("Failed to update session, existing")
-            self.exit()
+            raise TimeoutError("Session setup timed out") from None
+
+        if self.user_config['immediate_initialisation']:
+            await self.toggle_recording()
 
         amp_widget = self.query_one("#amp-graph", AmplitudeGraph)
 
@@ -286,6 +335,9 @@ class RealtimeApp(App[None]):
             self.show_config()
 
     async def toggle_recording(self) -> None:
+        if self.ai_service is None or not self.session_updated.is_set():
+            self.notify("Not connected. Open Config to check your API settings.", severity="warning")
+            return
         send_button = self.query_one("#send-button", Button)
         status_indicator = self.query_one(AudioStatusIndicator)
         if status_indicator.is_recording:
@@ -294,7 +346,10 @@ class RealtimeApp(App[None]):
             send_button.label = "Record"
             status_indicator.is_recording = False
 
-            await self.ai_service.request_response_if_manual_mode()
+            try:
+                await self.ai_service.request_response_if_manual_mode()
+            except Exception as error:
+                self.show_connection_error(error)
         else:
             log.debug("Toggle recording on...")
             send_button.label = "Stop"
@@ -331,7 +386,11 @@ class RealtimeApp(App[None]):
         if event.key == "s":
             # To log for timing purposes
             log.info("Requesting response manually")
-            await self.ai_service.request_response()
+            if self.ai_service is not None and self.session_updated.is_set():
+                try:
+                    await self.ai_service.request_response()
+                except Exception as error:
+                    self.show_connection_error(error)
             return
 
         if event.key == "k":

@@ -171,6 +171,19 @@ async def test_connection_startup_failure_preserves_original_error(openai_servic
     assert not openai_service.connected.is_set()
 
 
+async def test_server_error_event_is_reported_to_app(openai_service):
+    with pytest.raises(ConnectionError, match="provider rejected"):
+        await receive(openai_service, [NS(type="error")])
+    assert openai_service.connection is None
+
+
+async def test_gemini_connection_failure_is_reported_to_app(gemini_service):
+    gemini_service.client.aio.live.connect.side_effect = RuntimeError("Authentication failed")
+    with pytest.raises(RuntimeError, match="Authentication failed"):
+        await gemini_service.handle_realtime_connection(asyncio.Queue())
+    assert gemini_service.session is None
+
+
 async def test_completed_response_logs_transcript_and_usage(openai_service):
     usage = NS(total_tokens=10)
     openai_service.write_realtime_tokens_wrapper = AsyncMock()
