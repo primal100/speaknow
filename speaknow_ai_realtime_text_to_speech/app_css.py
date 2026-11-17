@@ -36,6 +36,11 @@ CSS = """
         border: round rgb(205, 133, 63);
     }
 
+    #audio-devices {
+        height: auto;
+        margin: 0 1;
+    }
+
     #status-row {
         height: 3;
         width: 100%;
