@@ -16,6 +16,7 @@ def app_state(config):
         config_manager=Mock(), notify=Mock(), restart_workers=AsyncMock(),
         ai_service=NS(request_response_if_manual_mode=AsyncMock()),
         send_mic_audio_worker=None, show_connection_error=Mock(),
+        update_audio_devices=Mock(return_value="Microphone: USB mic\nOutput: Headphones"),
     )
 
 
@@ -82,12 +83,54 @@ async def test_recording_toggle_updates_button_status_and_manual_response(app_mo
     assert app_state.should_send_audio.is_set()
     assert indicator.is_recording is True
     assert button.label == "Stop"
+    app_state.update_audio_devices.assert_called_once()
     app_state.ai_service.request_response_if_manual_mode.assert_not_awaited()
     await app_module.RealtimeApp.toggle_recording(app_state)
     assert not app_state.should_send_audio.is_set()
     assert indicator.is_recording is False
     assert button.label == "Record"
     app_state.ai_service.request_response_if_manual_mode.assert_awaited_once()
+
+
+@pytest.mark.parametrize("play_audio,provider,modalities,expected", [
+    (True, "openai", ["audio"], "Headphones [USB]"),
+    (False, "openai", ["audio"], "Disabled (playback off)"),
+    (True, "openai", ["text"], "Not used (text-only responses)"),
+    (True, "xai", ["text"], "Not used (text-only responses)"),
+    (True, "google", ["text"], "Headphones [USB]"),
+])
+async def test_device_display_at_automatic_recording_start(
+    app_module, monkeypatch, audio_backend, play_audio, provider, modalities, expected,
+):
+    microphone = Mock(device=7, read_available=0)
+    monkeypatch.setattr(audio_backend, "InputStream", Mock(return_value=microphone))
+    monkeypatch.setattr(audio_backend, "query_devices", Mock(
+        side_effect=lambda index: {"name": {7: "Microphone [USB]", 9: "Headphones [USB]"}[index]}
+    ))
+    monkeypatch.setattr(app_module, "AudioPlayerAsync", Mock(return_value=Mock(stream=Mock(device=9))))
+    for name in ("realtime_app", "realtime_tokens"):
+        monkeypatch.setattr(app_module.logging.getLogger(name), "handlers", [])
+
+    async def connected(queue):
+        queue.put_nowait({"type": "session_updated"})
+        await asyncio.Event().wait()
+
+    service = NS(handle_realtime_connection=connected, cleanup_resources=AsyncMock(),
+                 request_response_if_manual_mode=AsyncMock())
+    monkeypatch.setattr(app_module, "get_ai_service", Mock(return_value=service))
+    app = app_module.RealtimeApp()
+    app.user_config.update(immediate_initialisation=True, play_audio=play_audio,
+                           ai_service=provider, output_modalities=modalities)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.pause()
+        assert app.query_one(app_module.AudioStatusIndicator).is_recording
+        label = app.query_one("#audio-devices")
+        assert str(label.render()) == f"Microphone: Microphone [USB]\nOutput: {expected}"
+        microphone.start.assert_called_once()
+        await app.toggle_recording()
+        await app.toggle_recording()
+        assert str(label.render()) == f"Microphone: Microphone [USB]\nOutput: {expected}"
+    microphone.close.assert_called_once()
 
 
 @pytest.mark.parametrize("settings", [None, {"prompt": "Updated"}])

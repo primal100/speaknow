@@ -17,7 +17,7 @@ except OSError:
     print("sudo apt install portaudio19-dev ffmpeg")
     raise
 
-from speaknow_ai_realtime_text_to_speech.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync
+from speaknow_ai_realtime_text_to_speech.audio_util import CHANNELS, SAMPLE_RATE, AudioPlayerAsync, stream_device_name
 import audioop
 
 from speaknow_ai_realtime_text_to_speech.app_css import CSS
@@ -74,6 +74,8 @@ class RealtimeApp(App[None]):
         self._connection_error_shown = False
 
         self.audio_player = AudioPlayerAsync()
+        self.input_stream = None
+        self.audio_devices = Static("Microphone: Not ready", id="audio-devices", markup=False)
 
         self.session_updated = asyncio.Event()
         self.connection_cancelled = asyncio.Event()
@@ -94,6 +96,7 @@ class RealtimeApp(App[None]):
                 yield Button("Record", id="send-button")
                 yield Button("Config", id="config-button")
                 yield Button("Quit", id="quit-button")
+            yield self.audio_devices
             yield RichLog(id="middle-pane", wrap=True, highlight=True, markup=True)
             yield RichLog(id="lower-middle-pane", wrap=True, highlight=True, markup=True)
             yield RichLog(id="bottom-pane", wrap=True, highlight=True, markup=True)
@@ -259,15 +262,9 @@ class RealtimeApp(App[None]):
         except asyncio.TimeoutError:
             raise TimeoutError("Session setup timed out") from None
 
-        if self.user_config['immediate_initialisation']:
-            await self.toggle_recording()
-
         amp_widget = self.query_one("#amp-graph", AmplitudeGraph)
 
         sent_audio = False
-
-        device_info = sd.query_devices()
-        print(device_info)
 
         read_size = int(SAMPLE_RATE * 0.02)
 
@@ -276,11 +273,14 @@ class RealtimeApp(App[None]):
             samplerate=SAMPLE_RATE,
             dtype="int16",
         )
-        stream.start()
-
         status_indicator = self.query_one(AudioStatusIndicator)
 
         try:
+            stream.start()
+            self.input_stream = stream
+            self.update_audio_devices()
+            if self.user_config['immediate_initialisation']:
+                await self.toggle_recording()
 
             while True:
 
@@ -304,9 +304,24 @@ class RealtimeApp(App[None]):
         except KeyboardInterrupt:
             pass
         finally:
+            self.input_stream = None
             log.debug("Stopping mic stream...")
             stream.stop()
             stream.close()
+            self.update_audio_devices()
+
+    def update_audio_devices(self) -> str:
+        microphone = stream_device_name(self.input_stream)
+        if not self.user_config.get("play_audio", True):
+            output = "Disabled (playback off)"
+        elif (self.user_config.get("ai_service") in ("openai", "xai")
+              and "audio" not in self.user_config.get("output_modalities", ["audio"])):
+            output = "Not used (text-only responses)"
+        else:
+            output = stream_device_name(self.audio_player.stream)
+        description = f"Microphone: {microphone}\nOutput: {output}"
+        self.audio_devices.update(description)
+        return description
 
     def show_config(self) -> None:
         self.push_screen(ConfigModal(), self.apply_config)
@@ -352,6 +367,8 @@ class RealtimeApp(App[None]):
                 self.show_connection_error(error)
         else:
             log.debug("Toggle recording on...")
+            devices = self.update_audio_devices()
+            log.info("Recording started. %s", devices.replace("\n", "; "))
             send_button.label = "Stop"
             self.should_send_audio.set()
             status_indicator.is_recording = True

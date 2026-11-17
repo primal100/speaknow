@@ -12,6 +12,17 @@ CHUNK_LENGTH_S = 0.05  # 50ms
 SAMPLE_RATE = 24000
 CHANNELS = 1
 
+
+def stream_device_name(stream) -> str:
+    """Describe the device bound to an open stream, not the current default."""
+    if stream is None:
+        return "Not ready"
+    try:
+        return sd.query_devices(stream.device)["name"]
+    except Exception:
+        # Device metadata is optional; it must never prevent recording.
+        return "Unknown device"
+
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 
 

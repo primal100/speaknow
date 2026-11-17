@@ -53,3 +53,20 @@ def test_stream_starts_once_until_stopped(player):
 def test_terminate_closes_output_stream(player):
     player.terminate()
     player.stream.close.assert_called_once()
+
+
+def test_device_name_uses_open_stream_device(monkeypatch, audio_backend):
+    from speaknow_ai_realtime_text_to_speech.audio_util import stream_device_name
+
+    query = Mock(return_value={"name": "USB microphone [2]"})
+    monkeypatch.setattr(audio_backend, "query_devices", query)
+    assert stream_device_name(Mock(device=7)) == "USB microphone [2]"
+    query.assert_called_once_with(7)
+
+
+def test_missing_device_metadata_does_not_interrupt_recording(monkeypatch, audio_backend):
+    from speaknow_ai_realtime_text_to_speech.audio_util import stream_device_name
+
+    monkeypatch.setattr(audio_backend, "query_devices", Mock(side_effect=RuntimeError("Device removed")))
+    assert stream_device_name(Mock(device=7)) == "Unknown device"
+    assert stream_device_name(None) == "Not ready"

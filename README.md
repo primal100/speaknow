@@ -12,6 +12,7 @@ This project is based on and inspired by the `push_to_talk_app.py` example from 
 * **Configurable Parameters:** Easily adjust system prompts, model names, mode, and transcription options through a built-in TUI settings menu.
 * **Professional TUI:** A clean, "sticky" interface with persistent headers, footers, and scrollable settings panes using ```textual```.
 * **Voice Amplitude Monitor:** Monitor the volume of the voice input
+* **Audio Device Status:** See the microphone and output device below the recording controls, with explicit playback-off and text-only states. Each recording start also logs the devices in use.
 
 ## Installation
 
