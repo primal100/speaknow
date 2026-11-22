@@ -1,7 +1,12 @@
 import os
 import yaml
 from typing import Any
-from .ai_services import DEFAULT_AI_SERVICE, DEFAULT_AI_SERVICE_MODEL, DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL
+from .ai_services import (
+    DEFAULT_AI_SERVICE,
+    DEFAULT_AI_SERVICE_MODEL,
+    DEFAULT_AI_SERVICE_TRANSCRIPTION_MODEL,
+    OpenAIGPTRealtime,
+)
 from .directories import get_config_file
 
 
@@ -33,8 +38,17 @@ class ConfigManager:
             self.save(self.defaults)
             return self.defaults
         with open(self.config_file, "r") as f:
-            saved = yaml.safe_load(f)
-            return {**self.defaults, **({} if saved is None else saved)}
+            saved = yaml.safe_load(f) or {}
+        defaults = self.defaults
+        if saved.get("ai_service") == "openai" or (
+            "ai_service" not in saved and str(saved.get("model", "")).startswith("gpt-realtime")
+        ):
+            defaults = {
+                **defaults,
+                **OpenAIGPTRealtime.set_default_config_options_on_change(),
+                "ai_service": "openai",
+            }
+        return {**defaults, **saved}
 
     def save(self, data: dict):
         with open(self.config_file, "w") as f:

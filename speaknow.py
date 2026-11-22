@@ -88,7 +88,10 @@ class RealtimeApp(App[None]):
         """Create child widgets for the app."""
         with Container():
             with Horizontal(id="session-row"):
-                yield Static(id="version-display", content=f"{APP_NAME} v{version}")
+                yield Static(
+                    id="version-display",
+                    content=f"[#70decb]▂▅[/][#d7fff1]█[/][#70decb]▆▃[/] {APP_NAME} v{version}",
+                )
                 yield SessionDisplay(id="session-display")
                 yield AmplitudeGraph(id="amp-graph")
             with Horizontal(id="status-row"):
