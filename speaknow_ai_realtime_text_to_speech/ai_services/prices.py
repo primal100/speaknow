@@ -1,5 +1,7 @@
 # USD per 1M tokens, except per_interval (USD per 60 seconds).
 realtime_costs = {
+    "gpt-live-1.1": {"per_interval": 0.05},
+    "gpt-live-1": {"per_interval": 0.05},
     "gpt-realtime-2.1": {
         "text_in": 4.00,
         "cached_text_in": 0.40,

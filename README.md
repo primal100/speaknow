@@ -7,7 +7,7 @@ This project is based on and inspired by the `push_to_talk_app.py` example from 
 
 ## Features
 
-* **Low-Latency Speech-to-Speech:** Direct multimodal interaction using the `gpt-realtime` or `gpt-realtime-mini` or ``gemini-2.5-flash-native-audio`` models for near-instant responses.
+* **Low-Latency Speech-to-Speech:** New configurations default to OpenAI GPT-Live with `gpt-live-1.1`. OpenAI GPT Realtime remains available in the service selector with `gpt-realtime-2.1-mini` as its default.
 * **Real-time Transcription:** View live streaming transcripts of your conversation as you speak.
 * **Configurable Parameters:** Easily adjust system prompts, model names, mode, and transcription options through a built-in TUI settings menu.
 * **Professional TUI:** A clean, "sticky" interface with persistent headers, footers, and scrollable settings panes using ```textual```.
@@ -17,6 +17,18 @@ This project is based on and inspired by the `push_to_talk_app.py` example from 
 ## Installation
 
 SpeakNow requires **Python 3.11 or greater**.
+
+### Windows installer
+
+From a checkout of this repository, run the Python installer in PowerShell.
+
+```powershell
+py install_windows.py --all
+```
+
+This installs SpeakNow for your Windows account under `%LOCALAPPDATA%\Programs\SpeakNow` without administrator access. Use `--add-to-path`, `--desktop`, or `--start-menu` individually to choose which options to enable. Running the script without options installs only the app. Re-run the same command to update from your checkout.
+
+### Install with pip
 
 To install the latest version from PyPI, run:
 

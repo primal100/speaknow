@@ -105,6 +105,7 @@ CSS = """
     #version-display {
         height: 3;
         width: 0.5fr;
+        min-width: 24;
         content-align: left middle;
         background: #2a2b36;
         border: solid rgb(91, 164, 91);
